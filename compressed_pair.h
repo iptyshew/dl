@@ -35,6 +35,9 @@ class compressed_pair : private compressed_pair_elem<T1, 0>
 public:
     using Base1 = compressed_pair_elem<T1, 0>;
     using Base2 = compressed_pair_elem<T2, 1>;
+
+    static_assert(!std::is_same_v<T1, T2>, "Not support");
+
 public:
     compressed_pair() : Base1(), Base2() {}
     compressed_pair(T1&& first, T2&& second)

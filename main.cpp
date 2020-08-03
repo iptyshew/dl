@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -6,12 +7,23 @@
 class Custom
 {
 public:
-    Custom(int a) : a(a) {}
-    int a;
+    Custom() = default;
+    ~Custom() {
+        std::cout << "destroy\n" ;
+    }
 };
 
+template<typename T>
+void print(const dl::vector<T>& v) {
+    for (auto&& e : v) {
+        std::cout << e << " ";
+    }
+    std::cout << std::endl;
+}
+
 int main() {
-    dl::vector<int> v;
-    v.push_back(1);
-    std::cout << sizeof(v);
+    dl::vector<Custom> v;
+    Custom a, b;
+    v.push_back(a);
+    v.push_back(b);
 }

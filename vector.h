@@ -49,8 +49,23 @@ public:
         pointer i;
     };
 
-    iterator begin() { return iterator(begin_); }
-    iterator end() { return iterator(end_); }
+    using const_iterator = const iterator;
+
+    iterator begin() {
+        return iterator(begin_);
+    }
+
+    iterator end() {
+        return iterator(end_);
+    }
+
+    const_iterator begin() const {
+        return iterator(begin_);
+    }
+
+    const_iterator end() const {
+        return iterator(end_);
+    }
 
 public:
     vector() = default;
@@ -71,6 +86,10 @@ public:
         return static_cast<size_type>(capacity_.first() - begin_);
     }
 
+    bool empty() const {
+        return begin_ == end_;
+    }
+
     vector(std::initializer_list<value_type> list) {
         reserve(list.size());
         for (auto&& elem : list) {
@@ -79,17 +98,20 @@ public:
     }
 
     void reserve(size_type n) {
-        auto new_begin = allocator_traits::allocate(capacity_.second(), n);
-        std::copy(begin_, end_, new_begin);
+        auto buff = allocator_traits::allocate(alloc(), n);
+        for (auto i = begin_; i != end_; ++i) {
+            allocator_traits::construct(alloc(), buff, *i);
+        }
+
         auto sz = size();
-        delete begin_;
-        begin_ = new_begin;
+        allocator_traits::deallocate(alloc(), begin_, capacity());
+        begin_ = buff;
         end_ = begin_ + sz;
         capacity_.first() = begin_ + n;
     }
 
     void resize(size_type n) {
-        begin_ = allocator_traits::allocate(capacity_.second(), n);
+        begin_ = allocator_traits::allocate(alloc(), n);
         end_ = begin_ + n;
         capacity_.first() = end_;
     }
@@ -98,6 +120,7 @@ public:
         if (end_ == capacity_.first()) {
             reserve(expand(size()));
         }
+        allocator_traits::construct(alloc(), end_, elem);
         *end_ = elem;
         ++end_;
     }
@@ -106,17 +129,24 @@ public:
         if (end_ == capacity_.first()) {
             reserve(expand(size()));
         }
-        *end_ = std::forward<value_type>(elem);
+        allocator_traits::costruct(alloc(), end_, std::forward<value_type>(elem));
         ++end_;
     }
 
     ~vector() {
-        allocator_traits::deallocate(capacity_.second(), begin_, capacity());
+        for (auto i = begin_; i != end_; ++i) {
+            allocator_traits::destroy(alloc(), i);
+        }
+        allocator_traits::deallocate(alloc(), begin_, capacity());
     }
 
 private:
     size_t expand(size_t sz) {
         return (sz == 0) ? 1 : sz * 2;
+    }
+
+    allocator_type& alloc() {
+        return capacity_.second();
     }
 
 private:
