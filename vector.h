@@ -5,10 +5,12 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <utility>
+#include "compressed_pair.h"
 
 namespace dl {
 
-template<typename T>
+template<typename T, typename Allocator = std::allocator<T>>
 class vector
 {
 public:
@@ -19,6 +21,8 @@ public:
     using const_reference = const value_type&;
     using pointer = T*;
     using const_pointer = const T*;
+    using allocator_type = Allocator;
+    using allocator_traits = std::allocator_traits<allocator_type>;
 
 public:
     class iterator
@@ -51,43 +55,63 @@ public:
 public:
     vector() = default;
 
-    const_reference operator[](size_type i) const { return (*this)[i]; }
-    reference operator[](size_type i) { return *(begin_ + i); }
-    size_type size() const { return end_ - begin_; }
+    const_reference operator[](size_type i) const {
+        return (*this)[i];
+    }
+
+    reference operator[](size_type i) {
+        return *(begin_ + i);
+    }
+
+    size_type size() const {
+        return static_cast<size_type>(end_ - begin_);
+    }
+
+    size_type capacity() const {
+        return static_cast<size_type>(capacity_.first() - begin_);
+    }
 
     vector(std::initializer_list<value_type> list) {
         reserve(list.size());
-        for (const_reference elem : list) {
-            push_back(elem);
+        for (auto&& elem : list) {
+            push_back(std::forward<value_type>(elem));
         }
     }
 
     void reserve(size_type n) {
-        auto new_begin = new T(n);
+        auto new_begin = allocator_traits::allocate(capacity_.second(), n);
         std::copy(begin_, end_, new_begin);
         auto sz = size();
         delete begin_;
         begin_ = new_begin;
         end_ = begin_ + sz;
-        capacity_ = begin_ + n;
+        capacity_.first() = begin_ + n;
     }
 
     void resize(size_type n) {
-        begin_ = new T(n);
+        begin_ = allocator_traits::allocate(capacity_.second(), n);
         end_ = begin_ + n;
-        capacity_ = end_;
+        capacity_.first() = end_;
     }
 
     void push_back(const_reference elem) {
-        if (end_ == capacity_) {
+        if (end_ == capacity_.first()) {
             reserve(expand(size()));
         }
         *end_ = elem;
         ++end_;
     }
 
+    void push_back(value_type&& elem) {
+        if (end_ == capacity_.first()) {
+            reserve(expand(size()));
+        }
+        *end_ = std::forward<value_type>(elem);
+        ++end_;
+    }
+
     ~vector() {
-        delete begin_;
+        allocator_traits::deallocate(capacity_.second(), begin_, capacity());
     }
 
 private:
@@ -98,7 +122,7 @@ private:
 private:
     pointer begin_ = nullptr;
     pointer end_ = nullptr;
-    pointer capacity_ = nullptr;
+    compressed_pair<pointer, allocator_type> capacity_;
 };
 
 } // namespace dl

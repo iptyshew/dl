@@ -1,12 +1,17 @@
 #include <iostream>
+#include <memory>
 #include <vector>
 #include "vector.h"
 
-int main()
+class Custom
 {
-    dl::vector<int> vec = {9, 7, 4};
-    vec.push_back(19);
-    for (int e : vec) {
-        std::cout << e << std::endl;
-    }
+public:
+    Custom(int a) : a(a) {}
+    int a;
+};
+
+int main() {
+    dl::vector<int> v;
+    v.push_back(1);
+    std::cout << sizeof(v);
 }
