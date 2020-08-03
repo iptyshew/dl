@@ -101,6 +101,7 @@ public:
         auto buff = allocator_traits::allocate(alloc(), n);
         for (auto i = begin_; i != end_; ++i) {
             allocator_traits::construct(alloc(), buff, *i);
+            allocator_traits::destroy(alloc(), i);
         }
 
         auto sz = size();
