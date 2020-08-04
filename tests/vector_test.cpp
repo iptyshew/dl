@@ -1,5 +1,9 @@
-#pragma once
+#include <gtest/gtest.h>
+#include "vector.h"
 
-namespace dl {
+using namespace dl;
 
-} // namespace dl
+TEST(VectorTest, Simple) {
+
+
+}
