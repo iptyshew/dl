@@ -121,10 +121,7 @@ public:
     vector() = default;
 
     vector(std::initializer_list<value_type> list) {
-        reserve(list.size());
-        for (auto&& elem : list) {
-            push_back(std::forward<value_type>(elem));
-        }
+        assign(list.begin(), list.end());
     }
 
     template<typename InputIt>
@@ -145,6 +142,10 @@ public:
 
     reference operator[](size_type i) {
         return begin_[i];
+    }
+
+    bool operator==(const vector<value_type>& o) {
+        return size() == o.size() && std::equal(begin(), end(), o.begin());
     }
 
     const_reference at(size_t i) const {
@@ -203,6 +204,7 @@ public:
         if (n <= capacity()) {
             return;
         }
+
         auto buff = allocator_traits::allocate(alloc(), n);
         for (auto i = begin_, ib = buff; i != end_; ++i) {
             allocator_traits::construct(alloc(), ib++, std::move_if_noexcept(*i));
@@ -212,14 +214,41 @@ public:
         auto sz = size();
         allocator_traits::deallocate(alloc(), begin_, capacity());
         begin_ = buff;
-        end_ = begin_ + sz;
-        capacity_.first() = begin_ + n;
+        end_ = buff + sz;
+        capacity_.first() = buff + n;
     }
 
     void resize(size_type n) {
-        begin_ = allocator_traits::allocate(alloc(), n);
+        if (n <= size()) {
+            for (auto i = begin_ + n; i != end_; ++i) {
+                allocator_traits::destroy(alloc(), i);
+            }
+            end_ = begin_ + n;
+            return;
+        }
+        if (n <= capacity()) {
+            for (auto i = begin_ + size(); i != (begin_ + n); ++i) {
+                allocator_traits::construct(alloc(), i);
+            }
+            end_ = begin_ + n;
+            return;
+        }
+        auto buff = allocator_traits::allocate(alloc(), n);
+        for (auto i = begin_, ib = buff; i != end_; ++i) {
+            allocator_traits::construct(alloc(), ib++, std::move_if_noexcept(*i));
+            allocator_traits::destroy(alloc(), i);
+        }
+
+        auto sz = size();
+        allocator_traits::deallocate(alloc(), begin_, capacity());
+
+        for (auto i = buff + size(); i != (buff + n); ++i) {
+            allocator_traits::construct(alloc(), i);
+        }
+
+        begin_ = buff;
         end_ = begin_ + n;
-        capacity_.first() = end_;
+        capacity_.first() = begin_ + n;
     }
 
     void push_back(const_reference elem) {

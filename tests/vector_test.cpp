@@ -3,8 +3,6 @@
 #include "vector.h"
 #include "test_type.h"
 
-using namespace dl;
-
 using size_type = dl::vector<int>::size_type;
 size_type cast(int n) {
     return static_cast<size_type>(n);
@@ -22,17 +20,18 @@ bool check_test_type(size_t dc, size_t clc, size_t mrc, size_t olc, size_t orc, 
 
 template<typename T>
 bool check_vec(const dl::vector<T>& vec, std::initializer_list<T> list) {
-    return vec.size() == list.size() && std::equal(vec.begin(), vec.end(), list.begin(), list.end());
+    return vec.size() == list.size() && std::equal(vec.begin(), vec.end(), list.begin());
 }
 
 TEST(VectorTest, Basic) {
     dl::vector<int> vec;
+    // check standart size
     ASSERT_EQ(sizeof(vec), 3 * sizeof(dl::vector<int>::size_type));
 }
 
 TEST(VectorTest, PushBack) {
-    test_type::init();
-    {
+    { // rvalue
+        test_type::init();
         dl::vector<test_type> vec;
         vec.push_back(test_type());
         ASSERT_EQ(vec.size(), cast(1));
@@ -40,8 +39,8 @@ TEST(VectorTest, PushBack) {
     }
     ASSERT_TRUE(check_test_type(1, 0, 1, 0, 0, 2));
 
-    test_type::init();
-    {
+    { // lvalue, expand capacity
+        test_type::init();
         dl::vector<test_type> vec;
         test_type temp;
         vec.push_back(temp);
@@ -51,6 +50,24 @@ TEST(VectorTest, PushBack) {
         ASSERT_EQ(vec.capacity(), cast(4));
     }
     ASSERT_TRUE(check_test_type(1, 3, 3, 0, 0, 7));
+
+    { // don't use move has't noexcept
+        test_type_exception::init();
+        dl::vector<test_type_exception> vec;
+        test_type_exception temp;
+        vec.push_back(temp);
+        vec.push_back(temp);
+        vec.push_back(temp);
+        ASSERT_EQ(cast(6), test_type_exception::copy_lval_construct);
+        ASSERT_EQ(cast(0), test_type_exception::move_rval_construct);
+    }
+    { // check content
+        dl::vector<int> vec;
+        vec.push_back(1);
+        vec.push_back(2);
+        vec.push_back(3);
+        ASSERT_TRUE(check_vec(vec, {1, 2, 3}));
+    }
 }
 
 TEST(VectorTest, Iterator) {
@@ -69,5 +86,63 @@ TEST(VectorTest, Iterator) {
 
     ASSERT_EQ(it - vec.begin(), 2);
     ASSERT_TRUE(vec.begin() < it);
+}
 
+TEST(VectorTest, reserve) {
+    test_type::init();
+    dl::vector<test_type> vec;
+
+    vec.reserve(100);
+    ASSERT_EQ(vec.capacity(), cast(100));
+
+    // capacity no down
+    vec.reserve(50);
+    ASSERT_EQ(vec.capacity(), cast(100));
+
+    ASSERT_EQ(test_type::default_construct, cast(0));
+    ASSERT_EQ(test_type::destruct, cast(0));
+}
+
+TEST(VectorTest, resize) {
+    { // n > capacity, n > size
+        test_type::init();
+        dl::vector<test_type> vec;
+        vec.reserve(10);
+        vec.resize(5);
+        vec.resize(15);
+        ASSERT_EQ(vec.capacity(), cast(15));
+        ASSERT_EQ(vec.size(), cast(15));
+    }
+    ASSERT_TRUE(check_test_type(15, 0, 5, 0, 0, 20));
+
+    { // n < capacity , n < size
+        test_type::init();
+        dl::vector<test_type> vec;
+        vec.reserve(10);
+        vec.resize(7);
+        vec.resize(3);
+        ASSERT_EQ(vec.capacity(), cast(10));
+        ASSERT_EQ(vec.size(), cast(3));
+    }
+    ASSERT_TRUE(check_test_type(7, 0, 0, 0, 0, 7));
+
+    { // n < capacity, n > size
+        test_type::init();
+        dl::vector<test_type> vec;
+        vec.reserve(10);
+        vec.resize(1);
+        vec.resize(5);
+        ASSERT_EQ(vec.capacity(), cast(10));
+        ASSERT_EQ(vec.size(), cast(5));
+    }
+    ASSERT_TRUE(check_test_type(5, 0, 0, 0, 0, 5));
+
+    { // n = capacity = size
+        test_type::init();
+        dl::vector<test_type> vec;
+        vec.reserve(2);
+        vec.resize(2);
+        vec.resize(2);
+    }
+    ASSERT_TRUE(check_test_type(2, 0, 0, 0, 0, 2));
 }
