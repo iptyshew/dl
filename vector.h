@@ -1,10 +1,10 @@
 #pragma once
 #include <cstddef>
-#include <cstdlib>
 #include <algorithm>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include "compressed_pair.h"
 
@@ -71,11 +71,25 @@ public:
     vector() = default;
 
     const_reference operator[](size_type i) const {
-        return (*this)[i];
+        return begin_[i];
     }
 
     reference operator[](size_type i) {
-        return *(begin_ + i);
+        return begin_[i];
+    }
+
+    const_reference at(size_t i) const {
+        if (i >= size()) {
+            throw std::out_of_range("vector index out of bounds");
+        }
+        return begin_[i];
+    }
+
+    reference at(size_t i) {
+        if (i >= size()) {
+            throw std::out_of_range("vector index out of bounds");
+        }
+        return begin_[i];
     }
 
     size_type size() const {
@@ -90,6 +104,26 @@ public:
         return begin_ == end_;
     }
 
+    reference front() {
+        assert(begin_ != nullptr);
+        return *begin_;
+    }
+
+    const_reference front() const {
+        assert(begin_ != nullptr);
+        return *begin_;
+    }
+
+    reference back() {
+        assert(end_ - 1 != nullptr);
+        return *(end_ - 1);
+    }
+
+    const_reference back() const {
+        assert(end_ - 1 != nullptr);
+        return *(end_ - 1);
+    }
+
     vector(std::initializer_list<value_type> list) {
         reserve(list.size());
         for (auto&& elem : list) {
@@ -98,9 +132,12 @@ public:
     }
 
     void reserve(size_type n) {
+        if (n <= capacity()) {
+            return;
+        }
         auto buff = allocator_traits::allocate(alloc(), n);
         for (auto i = begin_; i != end_; ++i) {
-            allocator_traits::construct(alloc(), buff, *i);
+            allocator_traits::construct(alloc(), buff, std::move(*i));
             allocator_traits::destroy(alloc(), i);
         }
 
@@ -122,7 +159,6 @@ public:
             reserve(expand(size()));
         }
         allocator_traits::construct(alloc(), end_, elem);
-        *end_ = elem;
         ++end_;
     }
 
