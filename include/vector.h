@@ -124,6 +124,12 @@ public:
         return *(end_ - 1);
     }
 
+    void clear() {
+        for (auto i = begin_; i != end_; ++i) {
+            allocator_traits::destroy(alloc(), i);
+        }
+    }
+
     vector(std::initializer_list<value_type> list) {
         reserve(list.size());
         for (auto&& elem : list) {
@@ -136,8 +142,8 @@ public:
             return;
         }
         auto buff = allocator_traits::allocate(alloc(), n);
-        for (auto i = begin_; i != end_; ++i) {
-            allocator_traits::construct(alloc(), buff, std::move(*i));
+        for (auto i = begin_, ib = buff; i != end_; ++i) {
+            allocator_traits::construct(alloc(), ib++, std::move(*i));
             allocator_traits::destroy(alloc(), i);
         }
 
@@ -166,14 +172,31 @@ public:
         if (end_ == capacity_.first()) {
             reserve(expand(size()));
         }
-        allocator_traits::costruct(alloc(), end_, std::forward<value_type>(elem));
+        allocator_traits::construct(alloc(), end_, std::forward<value_type>(elem));
         ++end_;
     }
 
-    ~vector() {
-        for (auto i = begin_; i != end_; ++i) {
-            allocator_traits::destroy(alloc(), i);
+    iterator insert(const_iterator pos, const T& value) {
+        size_t new_capacity = expand(size());
+        auto buff = allocator_traits::allocate(alloc(), new_capacity);
+        for (auto i = begin(), ib = buff; i < pos; ++i) {
+            allocator_traits::construct(alloc(), ib++, std::move(*i));
+            allocator_traits::destroy(alloc(), std::addressof(*i));
         }
+        allocator_traits::construct(alloc(), buff + (pos - begin()), value);
+        for (auto i = pos, ib = buff + (pos - begin() + 1); i != end(); ++i) {
+            allocator_traits::construct(alloc(), ib++, std::move(*i));
+            allocator_traits::destroy(alloc(), std::addressof(*i));
+        }
+        auto sz = size();
+        allocator_traits::deallocate(alloc(), begin_, capacity());
+        begin_ = buff;
+        end_ = begin_ + sz + 1;
+        capacity_.first() = begin_ + new_capacity;
+    }
+
+    ~vector() {
+        clear();
         allocator_traits::deallocate(alloc(), begin_, capacity());
     }
 

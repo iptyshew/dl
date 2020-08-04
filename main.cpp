@@ -22,8 +22,11 @@ void print(const dl::vector<T>& v) {
 }
 
 int main() {
-    dl::vector<Custom> v;
-    Custom a, b;
-    v.push_back(a);
-    v.push_back(b);
+    std::vector<int> v;
+    v.insert(v.begin(), 1);
+    std::cout << v.capacity() << " ";
+    v.insert(v.begin(), 1);
+    std::cout << v.capacity() << " ";
+    v.insert(v.begin(), 1);
+    std::cout << v.capacity() << " ";
 }
