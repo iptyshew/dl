@@ -2,17 +2,17 @@ cmake_minimum_required(VERSION 3.0)
 
 set(ANTA vector)
 
-project(${ANTA})
-add_executable(${ANTA} main.cpp)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 
-#target_include_directories(${ANTA} PUBLIC include)
-add_subdirectory(include)
-target_link_libraries(${ANTA} dl)
 
+project(${ANTA})
+add_executable(${ANTA} main.cpp)
+
+target_include_directories(${ANTA} PUBLIC include)
+target_link_libraries(${ANTA} dl)
 
 # Download automatically, you can also just copy the conan.cmake file
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/conan.cmake")
