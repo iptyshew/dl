@@ -6,4 +6,5 @@
 
 
 int main() {
+    std::vector<int> a;
 }

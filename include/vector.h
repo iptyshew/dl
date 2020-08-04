@@ -36,17 +36,68 @@ public:
         using iterator_category = std::random_access_iterator_tag;
 
     public:
-        iterator& operator++() { ++i; return *this; }
-        iterator operator++(int) { iterator r(i); ++(*this); return r; }
-        bool operator==(iterator other) const { return i == other.i; }
-        bool operator!=(iterator other) const { return !(*this == other); }
-        reference operator*() const { return *i; }
+        iterator& operator++() {
+            ++i_;
+            return *this;
+        }
+
+        iterator operator++(int) {
+            iterator r(i_); ++(*this); return r;
+        }
+
+        bool operator==(const iterator& other) const {
+            return i_ == other.i_;
+        }
+
+        bool operator!=(const iterator& other) const {
+            return !(*this == other);
+        }
+
+        reference operator*() const {
+            return *i_;
+        }
+
+        iterator operator+(difference_type n) const {
+            return i_ + n;
+        }
+
+        iterator operator-(difference_type n) const {
+            return i_ - n;
+        }
+
+        difference_type operator-(const iterator& o) const {
+            return i_ - o.i_;
+        }
+
+        bool operator<(const iterator& o) const {
+            return i_ < o.i_;
+        }
+
+        bool operator<=(const iterator& o) const {
+            return i_ <= o.i_;
+        }
+
+        bool operator>(const iterator& o) const {
+            return !(*this <= o);
+        }
+
+        bool operator>=(const iterator& o) const {
+            return !(*this < o);
+        }
+
+        reference operator[](size_type n) {
+            return i_[n];
+        }
+
+        const_reference operator[](size_type n) const {
+            return i_[n];
+        }
 
     private:
-        iterator(pointer i) : i(i) {}
+        iterator(pointer i) : i_(i) {}
 
     private:
-        pointer i;
+        pointer i_;
     };
 
     using const_iterator = const iterator;
@@ -66,9 +117,27 @@ public:
     const_iterator end() const {
         return iterator(end_);
     }
-
 public:
     vector() = default;
+
+    vector(std::initializer_list<value_type> list) {
+        reserve(list.size());
+        for (auto&& elem : list) {
+            push_back(std::forward<value_type>(elem));
+        }
+    }
+
+    template<typename InputIt>
+    void assign(InputIt b, InputIt e) {
+        reserve(std::distance(b, e));
+        while (b != e) {
+            push_back(*b++);
+        }
+    }
+
+    void assign(std::initializer_list<value_type> ilist) {
+        assign(ilist.begin(), ilist.end());
+    }
 
     const_reference operator[](size_type i) const {
         return begin_[i];
@@ -130,20 +199,13 @@ public:
         }
     }
 
-    vector(std::initializer_list<value_type> list) {
-        reserve(list.size());
-        for (auto&& elem : list) {
-            push_back(std::forward<value_type>(elem));
-        }
-    }
-
     void reserve(size_type n) {
         if (n <= capacity()) {
             return;
         }
         auto buff = allocator_traits::allocate(alloc(), n);
         for (auto i = begin_, ib = buff; i != end_; ++i) {
-            allocator_traits::construct(alloc(), ib++, std::move(*i));
+            allocator_traits::construct(alloc(), ib++, std::move_if_noexcept(*i));
             allocator_traits::destroy(alloc(), i);
         }
 
@@ -183,8 +245,9 @@ public:
             allocator_traits::construct(alloc(), ib++, std::move(*i));
             allocator_traits::destroy(alloc(), std::addressof(*i));
         }
-        allocator_traits::construct(alloc(), buff + (pos - begin()), value);
-        for (auto i = pos, ib = buff + (pos - begin() + 1); i != end(); ++i) {
+        auto idx = pos - begin();
+        allocator_traits::construct(alloc(), buff + idx, value);
+        for (auto i = pos, ib = buff + idx + 1; i != end(); ++i) {
             allocator_traits::construct(alloc(), ib++, std::move(*i));
             allocator_traits::destroy(alloc(), std::addressof(*i));
         }
@@ -193,6 +256,7 @@ public:
         begin_ = buff;
         end_ = begin_ + sz + 1;
         capacity_.first() = begin_ + new_capacity;
+        return begin() + idx;
     }
 
     ~vector() {

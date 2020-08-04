@@ -10,7 +10,7 @@ public:
     test_type(const test_type&) {
         ++copy_lval_construct;
     }
-    test_type(test_type&&) {
+    test_type(test_type&&) noexcept {
         ++move_rval_construct;
     }
 
@@ -19,7 +19,7 @@ public:
         return *this;
     }
 
-    test_type& operator=(test_type&&) {
+    test_type& operator=(test_type&&) noexcept {
         ++operator_rval_construct;
         return *this;
     }
