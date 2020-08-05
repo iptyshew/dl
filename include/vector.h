@@ -17,105 +17,31 @@ public:
     using value_type = T;
     using size_type = size_t;
     using difference_type = std::ptrdiff_t;
+
     using reference = value_type&;
     using const_reference = const value_type&;
-    using pointer = T*;
-    using const_pointer = const T*;
     using allocator_type = Allocator;
     using allocator_traits = std::allocator_traits<allocator_type>;
-
-public:
-    class iterator
-    {
-        friend vector;
-    public:
-        using difference_type = difference_type;
-        using value_type = value_type;
-        using pointer = pointer;
-        using reference = reference;
-        using iterator_category = std::random_access_iterator_tag;
-
-    public:
-        iterator& operator++() {
-            ++i_;
-            return *this;
-        }
-
-        iterator operator++(int) {
-            iterator r(i_); ++(*this); return r;
-        }
-
-        bool operator==(const iterator& other) const {
-            return i_ == other.i_;
-        }
-
-        bool operator!=(const iterator& other) const {
-            return !(*this == other);
-        }
-
-        reference operator*() const {
-            return *i_;
-        }
-
-        iterator operator+(difference_type n) const {
-            return i_ + n;
-        }
-
-        iterator operator-(difference_type n) const {
-            return i_ - n;
-        }
-
-        difference_type operator-(const iterator& o) const {
-            return i_ - o.i_;
-        }
-
-        bool operator<(const iterator& o) const {
-            return i_ < o.i_;
-        }
-
-        bool operator<=(const iterator& o) const {
-            return i_ <= o.i_;
-        }
-
-        bool operator>(const iterator& o) const {
-            return !(*this <= o);
-        }
-
-        bool operator>=(const iterator& o) const {
-            return !(*this < o);
-        }
-
-        reference operator[](size_type n) {
-            return i_[n];
-        }
-
-        const_reference operator[](size_type n) const {
-            return i_[n];
-        }
-
-    private:
-        iterator(pointer i) : i_(i) {}
-
-    private:
-        pointer i_;
-    };
-
+    using pointer = typename allocator_traits::pointer;
+    using const_pointer = typename allocator_traits::const_pointer;
+    using iterator = pointer;
     using const_iterator = const iterator;
 
+public:
     iterator begin() {
-        return iterator(begin_);
+        return begin_;
     }
 
     iterator end() {
-        return iterator(end_);
+        return end_;
     }
 
     const_iterator begin() const {
-        return iterator(begin_);
+        return begin_;
     }
 
     const_iterator end() const {
-        return iterator(end_);
+        return end_;
     }
 public:
     vector() = default;
@@ -239,7 +165,6 @@ public:
             allocator_traits::destroy(alloc(), i);
         }
 
-        auto sz = size();
         allocator_traits::deallocate(alloc(), begin_, capacity());
 
         for (auto i = buff + size(); i != (buff + n); ++i) {
