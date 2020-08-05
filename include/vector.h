@@ -35,36 +35,37 @@ public: // constructors
     }
 
 public: // simple members, operators
-    iterator begin() { return begin_; }
-    iterator end()   { return end_; }
+    const value_type* data() const noexcept { return begin_; }
+    value_type* data() noexcept             { return begin_; }
 
-    const_iterator begin() const { return begin_; }
-    const_iterator end()   const { return end_; }
+    iterator begin() noexcept { return begin_; }
+    iterator end() noexcept   { return end_; }
 
-    const_reference operator[](size_type i) const { return begin_[i]; }
-    reference operator[](size_type i)             { return begin_[i]; }
+    const_iterator begin() const noexcept { return begin_; }
+    const_iterator end() const noexcept   { return end_; }
 
-    size_type size() const { return static_cast<size_type>(end_ - begin_); }
+    const_reference operator[](size_type i) const noexcept{ return begin_[i]; }
+    reference operator[](size_type i) noexcept            { return begin_[i]; }
 
-    size_type capacity() const { return static_cast<size_type>(end_cap() - begin_); }
+    size_type size() const noexcept { return static_cast<size_type>(end_ - begin_); }
 
-    bool empty() const { return begin_ == end_; }
+    size_type capacity() const noexcept { return static_cast<size_type>(end_cap() - begin_); }
 
-    reference front()             { return begin_[0]; }
-    const_reference front() const { return begin_[0]; }
+    bool empty() const noexcept { return begin_ == end_; }
 
-    reference back()             { return end_[-1]; }
-    const_reference back() const { return end_[-1]; }
+    reference front() noexcept             { return begin_[0]; }
+    const_reference front() const noexcept { return begin_[0]; }
+
+    reference back() noexcept             { return end_[-1]; }
+    const_reference back() const noexcept { return end_[-1]; }
 
     const_reference at(size_t i) const {
-        if (i >= size())
-            throw std::out_of_range("vector index out of bounds");
+        if (i >= size()) throw std::out_of_range("vector index out of bounds");
         return begin_[i];
     }
 
     reference at(size_t i) {
-        if (i >= size())
-            throw std::out_of_range("vector index out of bounds");
+        if (i >= size()) throw std::out_of_range("vector index out of bounds");
         return begin_[i];
     }
 
@@ -81,7 +82,7 @@ public:
         assign(ilist.begin(), ilist.end());
     }
 
-    void clear() {
+    void clear() noexcept {
         for (auto i = begin_; i != end_; ++i) {
             allocator_traits::destroy(alloc(), i);
         }
@@ -153,6 +154,21 @@ public:
         ++end_;
     }
 
+    template<typename... Args>
+    reference emplace_back(Args&&... args) {
+        if (end_ == end_cap()) {
+            reserve(expand(size()));
+        }
+        allocator_traits::construct(alloc(), end_, std::forward<Args>(args)...);
+        ++end_;
+        return back();
+    }
+
+    void pop_back() {
+        allocator_traits::destroy(alloc(), end_ - 1);
+        --end_;
+    }
+
     iterator insert(const_iterator pos, const T& value) {
         size_t new_capacity = expand(size());
         auto buff = allocator_traits::allocate(alloc(), new_capacity);
@@ -172,6 +188,12 @@ public:
         end_ = begin_ + sz + 1;
         end_cap() = begin_ + new_capacity;
         return begin() + idx;
+    }
+
+    void swap(vector& other) noexcept {
+        std::swap(begin_, other.begin_);
+        std::swap(end_, other.end_);
+        std::swap(end_cap_allocator_, other.end_cap_allocator_);
     }
 
     ~vector() {

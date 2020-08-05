@@ -27,9 +27,18 @@ TEST(VectorTest, Basic) {
     dl::vector<int> vec;
     // check standart size
     ASSERT_EQ(sizeof(vec), 3 * sizeof(dl::vector<int>::size_type));
+
+    vec.push_back(1);
+    vec.push_back(2);
+    ASSERT_EQ(vec.front(), 1);
+    ASSERT_EQ(vec.back(), 2);
+    ASSERT_EQ(vec[0], 1);
+    ASSERT_EQ(vec.at(1), 2);
+    ASSERT_EQ(vec.size(), cast(2));
+    ASSERT_EQ(vec.data()[0], 1);
 }
 
-TEST(VectorTest, PushBack) {
+TEST(VectorTest, ChangeLastElement) {
     { // rvalue
         test_type::init();
         dl::vector<test_type> vec;
@@ -66,7 +75,21 @@ TEST(VectorTest, PushBack) {
         vec.push_back(1);
         vec.push_back(2);
         vec.push_back(3);
-        ASSERT_TRUE(check_vec(vec, {1, 2, 3}));
+        dl::vector<int> res{1, 2, 3};
+        ASSERT_EQ(vec, res);
+    }
+    { // emplacs_back
+        dl::vector<std::pair<int, int>> vec;
+        vec.emplace_back(1, 2);
+        ASSERT_EQ(vec.front().first, 1);
+        ASSERT_EQ(vec.front().second, 2);
+    }
+    { // pop_back
+        dl::vector<int> vec{1, 2, 3};
+        vec.pop_back();
+        ASSERT_EQ(vec.size(), cast(2));
+        ASSERT_EQ(vec.capacity(), cast(3));
+        ASSERT_EQ(vec.back(), 2);
     }
 }
 
