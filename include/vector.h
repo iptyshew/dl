@@ -25,31 +25,50 @@ public:
     using pointer = typename allocator_traits::pointer;
     using const_pointer = typename allocator_traits::const_pointer;
     using iterator = pointer;
-    using const_iterator = const iterator;
+    using const_iterator = const_pointer;
 
-public:
-    iterator begin() {
-        return begin_;
-    }
-
-    iterator end() {
-        return end_;
-    }
-
-    const_iterator begin() const {
-        return begin_;
-    }
-
-    const_iterator end() const {
-        return end_;
-    }
-public:
+public: // constructors
     vector() = default;
 
     vector(std::initializer_list<value_type> list) {
         assign(list.begin(), list.end());
     }
 
+public: // simple members, operators
+    iterator begin() { return begin_; }
+    iterator end()   { return end_; }
+
+    const_iterator begin() const { return begin_; }
+    const_iterator end()   const { return end_; }
+
+    const_reference operator[](size_type i) const { return begin_[i]; }
+    reference operator[](size_type i)             { return begin_[i]; }
+
+    size_type size() const { return static_cast<size_type>(end_ - begin_); }
+
+    size_type capacity() const { return static_cast<size_type>(end_cap() - begin_); }
+
+    bool empty() const { return begin_ == end_; }
+
+    reference front()             { return begin_[0]; }
+    const_reference front() const { return begin_[0]; }
+
+    reference back()             { return end_[-1]; }
+    const_reference back() const { return end_[-1]; }
+
+    const_reference at(size_t i) const {
+        if (i >= size())
+            throw std::out_of_range("vector index out of bounds");
+        return begin_[i];
+    }
+
+    reference at(size_t i) {
+        if (i >= size())
+            throw std::out_of_range("vector index out of bounds");
+        return begin_[i];
+    }
+
+public:
     template<typename InputIt>
     void assign(InputIt b, InputIt e) {
         reserve(std::distance(b, e));
@@ -60,64 +79,6 @@ public:
 
     void assign(std::initializer_list<value_type> ilist) {
         assign(ilist.begin(), ilist.end());
-    }
-
-    const_reference operator[](size_type i) const {
-        return begin_[i];
-    }
-
-    reference operator[](size_type i) {
-        return begin_[i];
-    }
-
-    bool operator==(const vector<value_type>& o) {
-        return size() == o.size() && std::equal(begin(), end(), o.begin());
-    }
-
-    const_reference at(size_t i) const {
-        if (i >= size()) {
-            throw std::out_of_range("vector index out of bounds");
-        }
-        return begin_[i];
-    }
-
-    reference at(size_t i) {
-        if (i >= size()) {
-            throw std::out_of_range("vector index out of bounds");
-        }
-        return begin_[i];
-    }
-
-    size_type size() const {
-        return static_cast<size_type>(end_ - begin_);
-    }
-
-    size_type capacity() const {
-        return static_cast<size_type>(capacity_.first() - begin_);
-    }
-
-    bool empty() const {
-        return begin_ == end_;
-    }
-
-    reference front() {
-        assert(begin_ != nullptr);
-        return *begin_;
-    }
-
-    const_reference front() const {
-        assert(begin_ != nullptr);
-        return *begin_;
-    }
-
-    reference back() {
-        assert(end_ - 1 != nullptr);
-        return *(end_ - 1);
-    }
-
-    const_reference back() const {
-        assert(end_ - 1 != nullptr);
-        return *(end_ - 1);
     }
 
     void clear() {
@@ -141,7 +102,7 @@ public:
         allocator_traits::deallocate(alloc(), begin_, capacity());
         begin_ = buff;
         end_ = buff + sz;
-        capacity_.first() = buff + n;
+        end_cap() = buff + n;
     }
 
     void resize(size_type n) {
@@ -173,11 +134,11 @@ public:
 
         begin_ = buff;
         end_ = begin_ + n;
-        capacity_.first() = begin_ + n;
+        end_cap() = begin_ + n;
     }
 
     void push_back(const_reference elem) {
-        if (end_ == capacity_.first()) {
+        if (end_ == end_cap()) {
             reserve(expand(size()));
         }
         allocator_traits::construct(alloc(), end_, elem);
@@ -185,7 +146,7 @@ public:
     }
 
     void push_back(value_type&& elem) {
-        if (end_ == capacity_.first()) {
+        if (end_ == end_cap()) {
             reserve(expand(size()));
         }
         allocator_traits::construct(alloc(), end_, std::forward<value_type>(elem));
@@ -209,7 +170,7 @@ public:
         allocator_traits::deallocate(alloc(), begin_, capacity());
         begin_ = buff;
         end_ = begin_ + sz + 1;
-        capacity_.first() = begin_ + new_capacity;
+        end_cap() = begin_ + new_capacity;
         return begin() + idx;
     }
 
@@ -219,18 +180,47 @@ public:
     }
 
 private:
-    size_t expand(size_t sz) {
-        return (sz == 0) ? 1 : sz * 2;
-    }
+    static size_t expand(size_t sz) { return (sz == 0) ? 1 : sz * 2; }
 
-    allocator_type& alloc() {
-        return capacity_.second();
-    }
+    allocator_type& alloc() { return end_cap_allocator_.second(); }
+
+    pointer& end_cap()             { return end_cap_allocator_.first(); }
+    const pointer& end_cap() const { return end_cap_allocator_.first(); }
 
 private:
     pointer begin_ = nullptr;
     pointer end_ = nullptr;
-    compressed_pair<pointer, allocator_type> capacity_;
+    compressed_pair<pointer, allocator_type> end_cap_allocator_;
 };
+
+template<typename T, typename Alloc>
+bool operator==(const vector<T, Alloc>& lhs, const vector<T, Alloc>& rhs) {
+    return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin());
+}
+
+template<typename T, typename Alloc>
+bool operator!=(const vector<T, Alloc>& lhs, const vector<T, Alloc>& rhs) {
+    return !(lhs == rhs);
+}
+
+template<typename T, typename Alloc>
+bool operator<(const vector<T, Alloc>& lhs, const vector<T, Alloc>& rhs) {
+    return std::lexicographical_compare(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+}
+
+template<typename T, typename Alloc>
+bool operator<=(const vector<T, Alloc>& lhs, const vector<T, Alloc>& rhs) {
+    return !(lhs > rhs);
+}
+
+template<typename T, typename Alloc>
+bool operator>(const vector<T, Alloc>& lhs, const vector<T, Alloc>& rhs) {
+    return rhs < lhs;
+}
+
+template<typename T, typename Alloc>
+bool operator>=(const vector<T, Alloc>& lhs, const vector<T, Alloc>& rhs) {
+    return !(lhs < rhs);
+}
 
 } // namespace dl

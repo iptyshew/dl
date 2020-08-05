@@ -146,3 +146,21 @@ TEST(VectorTest, resize) {
     }
     ASSERT_TRUE(check_test_type(2, 0, 0, 0, 0, 2));
 }
+
+TEST(VectorTest, compare) {
+    dl::vector<int> a{1, 2, 3};
+    dl::vector<int> b{1, 2, 3};
+    dl::vector<int> c{2, 3, 4};
+
+    ASSERT_EQ(a, b);
+    ASSERT_NE(b, c);
+
+    ASSERT_GT(c, a);
+    ASSERT_GE(b, a);
+
+    ASSERT_LT(b, c);
+    ASSERT_LE(a, b);
+
+    ASSERT_FALSE(a < b);
+    ASSERT_FALSE(b > a);
+}
