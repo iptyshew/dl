@@ -30,12 +30,16 @@ TEST(VectorTest, Basic) {
 
     vec.push_back(1);
     vec.push_back(2);
+
     ASSERT_EQ(vec.front(), 1);
     ASSERT_EQ(vec.back(), 2);
     ASSERT_EQ(vec[0], 1);
     ASSERT_EQ(vec.at(1), 2);
     ASSERT_EQ(vec.size(), cast(2));
     ASSERT_EQ(vec.data()[0], 1);
+
+    vec.clear();
+    ASSERT_EQ(vec.size(), cast(0));
 }
 
 TEST(VectorTest, ChangeLastElement) {
@@ -58,6 +62,10 @@ TEST(VectorTest, ChangeLastElement) {
         ASSERT_EQ(vec.size(), cast(3));
         ASSERT_EQ(vec.capacity(), cast(4));
     }
+    ASSERT_EQ(cast(3), test_type_exception::copy_lval_construct);
+    ASSERT_EQ(cast(3), test_type_exception::move_rval_construct);
+    ASSERT_EQ(cast(7), test_type_exception::destruct);
+
     ASSERT_TRUE(check_test_type(1, 3, 3, 0, 0, 7));
 
     { // don't use move has't noexcept

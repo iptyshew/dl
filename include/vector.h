@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <utility>
 #include "compressed_pair.h"
+#include "split_buffer.h"
 
 namespace dl {
 
@@ -83,27 +84,32 @@ public:
     }
 
     void clear() noexcept {
-        for (auto i = begin_; i != end_; ++i) {
-            allocator_traits::destroy(alloc(), i);
+        while (end_ != begin_) {
+            allocator_traits::destroy(alloc(), end_-- - 1);
         }
     }
 
-    void reserve(size_type n) {
-        if (n <= capacity()) {
-            return;
+    void reserve(size_type cap) {
+        if (cap > capacity()) {
+            split_buffer<value_type, allocator_type&> buff(size(), cap, alloc());
+            swap_out_buffer(buff);
         }
 
-        auto buff = allocator_traits::allocate(alloc(), n);
-        for (auto i = begin_, ib = buff; i != end_; ++i) {
-            allocator_traits::construct(alloc(), ib++, std::move_if_noexcept(*i));
-            allocator_traits::destroy(alloc(), i);
-        }
+        // if (n <= capacity()) {
+        //     return;
+        // }
 
-        auto sz = size();
-        allocator_traits::deallocate(alloc(), begin_, capacity());
-        begin_ = buff;
-        end_ = buff + sz;
-        end_cap() = buff + n;
+        // auto buff = allocator_traits::allocate(alloc(), n);
+        // for (auto i = begin_, ib = buff; i != end_; ++i) {
+        //     allocator_traits::construct(alloc(), ib++, std::move_if_noexcept(*i));
+        //     allocator_traits::destroy(alloc(), i);
+        // }
+
+        // auto sz = size();
+        // allocator_traits::deallocate(alloc(), begin_, capacity());
+        // begin_ = buff;
+        // end_ = buff + sz;
+        // end_cap() = buff + n;
     }
 
     void resize(size_type n) {
@@ -182,10 +188,10 @@ public:
             allocator_traits::construct(alloc(), ib++, std::move(*i));
             allocator_traits::destroy(alloc(), std::addressof(*i));
         }
-        auto sz = size();
         allocator_traits::deallocate(alloc(), begin_, capacity());
+
+        end_ = begin_ + size() + 1;
         begin_ = buff;
-        end_ = begin_ + sz + 1;
         end_cap() = begin_ + new_capacity;
         return begin() + idx;
     }
@@ -208,6 +214,20 @@ private:
 
     pointer& end_cap()             { return end_cap_allocator_.first(); }
     const pointer& end_cap() const { return end_cap_allocator_.first(); }
+
+    void swap_out_buffer(split_buffer<value_type, allocator_type&>& buff) {
+        uninit_move(begin_, end_, buff.begin);
+        std::swap(begin_, buff.begin);
+        std::swap(end_, buff.end);
+        std::swap(end_cap(), buff.end_cap());
+    }
+
+    template<typename InputIt, typename OutIt>
+    void uninit_move(InputIt b, InputIt e, OutIt res) {
+        while (b != e) {
+            allocator_traits::construct(alloc(), res++, std::move_if_noexcept(*(b++)));
+        }
+    }
 
 private:
     pointer begin_ = nullptr;
