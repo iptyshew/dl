@@ -84,64 +84,27 @@ public:
     }
 
     void clear() noexcept {
-        while (end_ != begin_) {
-            allocator_traits::destroy(alloc(), end_-- - 1);
-        }
+        end_ = destroy_range(begin_, end_, alloc());
     }
 
-    void reserve(size_type cap) {
-        if (cap > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(size(), cap, alloc());
+    void reserve(size_type n) {
+        if (n > capacity()) {
+            split_buffer<value_type, allocator_type&> buff(size(), n, alloc());
             swap_out_buffer(buff);
         }
-
-        // if (n <= capacity()) {
-        //     return;
-        // }
-
-        // auto buff = allocator_traits::allocate(alloc(), n);
-        // for (auto i = begin_, ib = buff; i != end_; ++i) {
-        //     allocator_traits::construct(alloc(), ib++, std::move_if_noexcept(*i));
-        //     allocator_traits::destroy(alloc(), i);
-        // }
-
-        // auto sz = size();
-        // allocator_traits::deallocate(alloc(), begin_, capacity());
-        // begin_ = buff;
-        // end_ = buff + sz;
-        // end_cap() = buff + n;
     }
 
     void resize(size_type n) {
-        if (n <= size()) {
-            for (auto i = begin_ + n; i != end_; ++i) {
-                allocator_traits::destroy(alloc(), i);
-            }
-            end_ = begin_ + n;
-            return;
+        auto sz = size();
+        if (n > capacity()) {
+            split_buffer<value_type, allocator_type&> buff(n, n, alloc());
+            construct_range(buff.begin + sz, buff.end, buff.alloc());
+            swap_out_buffer(buff);
+        } else if (n < sz) {
+            end_ = destroy_range(begin_ + n, end_, alloc());
+        } else if (n > sz) {
+            end_ = construct_range(begin_ + sz, begin_ + n, alloc());
         }
-        if (n <= capacity()) {
-            for (auto i = begin_ + size(); i != (begin_ + n); ++i) {
-                allocator_traits::construct(alloc(), i);
-            }
-            end_ = begin_ + n;
-            return;
-        }
-        auto buff = allocator_traits::allocate(alloc(), n);
-        for (auto i = begin_, ib = buff; i != end_; ++i) {
-            allocator_traits::construct(alloc(), ib++, std::move_if_noexcept(*i));
-            allocator_traits::destroy(alloc(), i);
-        }
-
-        allocator_traits::deallocate(alloc(), begin_, capacity());
-
-        for (auto i = buff + size(); i != (buff + n); ++i) {
-            allocator_traits::construct(alloc(), i);
-        }
-
-        begin_ = buff;
-        end_ = begin_ + n;
-        end_cap() = begin_ + n;
     }
 
     void push_back(const_reference elem) {
@@ -176,24 +139,23 @@ public:
     }
 
     iterator insert(const_iterator pos, const T& value) {
-        size_t new_capacity = expand(size());
-        auto buff = allocator_traits::allocate(alloc(), new_capacity);
-        for (auto i = begin(), ib = buff; i < pos; ++i) {
-            allocator_traits::construct(alloc(), ib++, std::move(*i));
-            allocator_traits::destroy(alloc(), std::addressof(*i));
-        }
-        auto idx = pos - begin();
-        allocator_traits::construct(alloc(), buff + idx, value);
-        for (auto i = pos, ib = buff + idx + 1; i != end(); ++i) {
-            allocator_traits::construct(alloc(), ib++, std::move(*i));
-            allocator_traits::destroy(alloc(), std::addressof(*i));
-        }
-        allocator_traits::deallocate(alloc(), begin_, capacity());
+        // split_buffer<value_type, allocator_type&> buff(size() + 1, expand(size()), alloc());
 
-        end_ = begin_ + size() + 1;
-        begin_ = buff;
-        end_cap() = begin_ + new_capacity;
-        return begin() + idx;
+        // for (auto i = begin(), ib = buff; i < pos; ++i) {
+        //     allocator_traits::construct(alloc(), ib++, std::move(*i));
+        //     allocator_traits::destroy(alloc(), std::addressof(*i));
+        // }
+        // auto idx = pos - begin();
+        // allocator_traits::construct(alloc(), buff + idx, value);
+        // for (auto i = pos, ib = buff + idx + 1; i != end(); ++i) {
+        //     allocator_traits::construct(alloc(), ib++, std::move(*i));
+        //     allocator_traits::destroy(alloc(), std::addressof(*i));
+        // }
+        // allocator_traits::deallocate(alloc(), begin_, capacity());
+
+        // swap_out_buffer(buff);
+        // return begin() + idx;
+        return begin();
     }
 
     void swap(vector& other) noexcept {
@@ -216,17 +178,32 @@ private:
     const pointer& end_cap() const { return end_cap_allocator_.first(); }
 
     void swap_out_buffer(split_buffer<value_type, allocator_type&>& buff) {
-        uninit_move(begin_, end_, buff.begin);
+        uninit_move(begin_, end_, buff.begin, buff.alloc());
         std::swap(begin_, buff.begin);
         std::swap(end_, buff.end);
         std::swap(end_cap(), buff.end_cap());
     }
 
     template<typename InputIt, typename OutIt>
-    void uninit_move(InputIt b, InputIt e, OutIt res) {
+    static void uninit_move(InputIt b, InputIt e, OutIt res, allocator_type& alloc) {
         while (b != e) {
-            allocator_traits::construct(alloc(), res++, std::move_if_noexcept(*(b++)));
+            allocator_traits::construct(alloc, res++, std::move_if_noexcept(*(b++)));
         }
+    }
+
+    static pointer destroy_range(pointer begin, pointer end, allocator_type& alloc) {
+        auto it = begin;
+        while (it != end) {
+            allocator_traits::destroy(alloc, it++);
+        }
+        return begin;
+    }
+
+    static pointer construct_range(pointer begin, pointer end, allocator_type& alloc) {
+        while (begin != end) {
+            allocator_traits::construct(alloc, begin++);
+        }
+        return begin;
     }
 
 private:
