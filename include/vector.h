@@ -84,7 +84,7 @@ public:
     }
 
     void clear() noexcept {
-        end_ = destroy_range(begin_, end_, alloc());
+        end_ = destroy_range(alloc(), begin_, end_);
     }
 
     void reserve(size_type n) {
@@ -98,12 +98,25 @@ public:
         auto sz = size();
         if (n > capacity()) {
             split_buffer<value_type, allocator_type&> buff(n, n, alloc());
-            construct_range(buff.begin + sz, buff.end, buff.alloc());
+            construct_range(buff.alloc(), buff.begin + sz, buff.end);
             swap_out_buffer(buff);
         } else if (n < sz) {
-            end_ = destroy_range(begin_ + n, end_, alloc());
+            end_ = destroy_range(alloc(), begin_ + n, end_);
         } else if (n > sz) {
-            end_ = construct_range(begin_ + sz, begin_ + n, alloc());
+            end_ = construct_range(alloc(), begin_ + sz, begin_ + n);
+        }
+    }
+
+    void resize(size_type n, const value_type& value) { // \todo :(
+        auto sz = size();
+        if (n > capacity()) {
+            split_buffer<value_type, allocator_type&> buff(n, n, alloc());
+            construct_range(buff.alloc(), buff.begin + sz, buff.end, value);
+            swap_out_buffer(buff);
+        } else if (n < sz) {
+            end_ = destroy_range(alloc(), begin_ + n, end_);
+        } else if (n > sz) {
+            end_ = construct_range(alloc(), begin_ + sz, begin_ + n, value);
         }
     }
 
@@ -178,20 +191,20 @@ private:
     const pointer& end_cap() const { return end_cap_allocator_.first(); }
 
     void swap_out_buffer(split_buffer<value_type, allocator_type&>& buff) {
-        uninit_move(begin_, end_, buff.begin, buff.alloc());
+        uninit_move(buff.alloc(), begin_, end_, buff.begin);
         std::swap(begin_, buff.begin);
         std::swap(end_, buff.end);
         std::swap(end_cap(), buff.end_cap());
     }
 
     template<typename InputIt, typename OutIt>
-    static void uninit_move(InputIt b, InputIt e, OutIt res, allocator_type& alloc) {
+    static void uninit_move(allocator_type& alloc, InputIt b, InputIt e, OutIt res) {
         while (b != e) {
             allocator_traits::construct(alloc, res++, std::move_if_noexcept(*(b++)));
         }
     }
 
-    static pointer destroy_range(pointer begin, pointer end, allocator_type& alloc) {
+    static pointer destroy_range(allocator_type& alloc, pointer begin, pointer end) {
         auto it = begin;
         while (it != end) {
             allocator_traits::destroy(alloc, it++);
@@ -199,9 +212,16 @@ private:
         return begin;
     }
 
-    static pointer construct_range(pointer begin, pointer end, allocator_type& alloc) {
+    static pointer construct_range(allocator_type& alloc, pointer begin, pointer end) {
         while (begin != end) {
             allocator_traits::construct(alloc, begin++);
+        }
+        return begin;
+    }
+
+    static pointer construct_range(allocator_type& alloc, pointer begin, pointer end, const value_type& val) {
+        while (begin != end) {
+            allocator_traits::construct(alloc, begin++, val);
         }
         return begin;
     }

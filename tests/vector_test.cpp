@@ -18,11 +18,6 @@ bool check_test_type(size_t dc, size_t clc, size_t mrc, size_t olc, size_t orc, 
         test_type::destruct == d;
 }
 
-template<typename T>
-bool check_vec(const dl::vector<T>& vec, std::initializer_list<T> list) {
-    return vec.size() == list.size() && std::equal(vec.begin(), vec.end(), list.begin());
-}
-
 TEST(VectorTest, Basic) {
     dl::vector<int> vec;
     // check standart size
@@ -176,6 +171,14 @@ TEST(VectorTest, resize) {
         vec.resize(2);
     }
     ASSERT_TRUE(check_test_type(2, 0, 0, 0, 0, 2));
+
+    { // resize val
+        test_type::init();
+        dl::vector<int> vec;
+        vec.resize(3, 3);
+        dl::vector<int> res{3, 3, 3};
+        ASSERT_EQ(vec, res);
+    }
 }
 
 TEST(VectorTest, compare) {
