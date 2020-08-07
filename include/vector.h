@@ -27,6 +27,8 @@ public:
     using const_pointer = typename allocator_traits::const_pointer;
     using iterator = pointer;
     using const_iterator = const_pointer;
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
 public: // constructors
     vector() = default;
@@ -45,6 +47,12 @@ public: // simple members, operators
     const_iterator begin() const noexcept { return begin_; }
     const_iterator end() const noexcept   { return end_; }
 
+    reverse_iterator rbegin() noexcept { return std::make_reverse_iterator(end_);   }
+    reverse_iterator rend() noexcept   { return std::make_reverse_iterator(begin_); }
+
+    const_reverse_iterator rbegin() const noexcept { return std::make_reverse_iterator(end_);   }
+    const_reverse_iterator rend() const noexcept   { return std::make_reverse_iterator(begin_); }
+
     const_reference operator[](size_type i) const noexcept{ return begin_[i]; }
     reference operator[](size_type i) noexcept            { return begin_[i]; }
 
@@ -61,18 +69,20 @@ public: // simple members, operators
     const_reference back() const noexcept { return end_[-1]; }
 
     const_reference at(size_t i) const {
-        if (i >= size()) throw std::out_of_range("vector index out of bounds");
+        if (i >= size())
+            throw std::out_of_range("vector index out of bounds");
         return begin_[i];
     }
 
     reference at(size_t i) {
-        if (i >= size()) throw std::out_of_range("vector index out of bounds");
+        if (i >= size())
+            throw std::out_of_range("vector index out of bounds");
         return begin_[i];
     }
 
 public:
     template<typename InputIt>
-    void assign(InputIt b, InputIt e) {
+    void assign(InputIt b, InputIt e) { // \todo
         reserve(std::distance(b, e));
         while (b != e) {
             push_back(*b++);
@@ -121,26 +131,18 @@ public:
     }
 
     void push_back(const_reference elem) {
-        if (end_ == end_cap()) {
-            reserve(expand(size()));
-        }
-        allocator_traits::construct(alloc(), end_, elem);
-        ++end_;
+        check_reserve();
+        unsafe_push_back(elem);
     }
 
     void push_back(value_type&& elem) {
-        if (end_ == end_cap()) {
-            reserve(expand(size()));
-        }
-        allocator_traits::construct(alloc(), end_, std::forward<value_type>(elem));
-        ++end_;
+        check_reserve();
+        unsafe_push_back(std::move(elem));
     }
 
     template<typename... Args>
     reference emplace_back(Args&&... args) {
-        if (end_ == end_cap()) {
-            reserve(expand(size()));
-        }
+        check_reserve();
         allocator_traits::construct(alloc(), end_, std::forward<Args>(args)...);
         ++end_;
         return back();
@@ -152,23 +154,11 @@ public:
     }
 
     iterator insert(const_iterator pos, const T& value) {
-        // split_buffer<value_type, allocator_type&> buff(size() + 1, expand(size()), alloc());
+        return insert_impl(pos - begin(), value);
+    }
 
-        // for (auto i = begin(), ib = buff; i < pos; ++i) {
-        //     allocator_traits::construct(alloc(), ib++, std::move(*i));
-        //     allocator_traits::destroy(alloc(), std::addressof(*i));
-        // }
-        // auto idx = pos - begin();
-        // allocator_traits::construct(alloc(), buff + idx, value);
-        // for (auto i = pos, ib = buff + idx + 1; i != end(); ++i) {
-        //     allocator_traits::construct(alloc(), ib++, std::move(*i));
-        //     allocator_traits::destroy(alloc(), std::addressof(*i));
-        // }
-        // allocator_traits::deallocate(alloc(), begin_, capacity());
-
-        // swap_out_buffer(buff);
-        // return begin() + idx;
-        return begin();
+    iterator insert(const_iterator pos, T&& value) {
+        return insert_impl(pos - begin(), std::move(value));
     }
 
     void swap(vector& other) noexcept {
@@ -197,10 +187,18 @@ private:
         std::swap(end_cap(), buff.end_cap());
     }
 
+    void swap_out_buffer(split_buffer<value_type, allocator_type&>& buff, pointer pos) {
+        uninit_move(buff.alloc(), begin_, pos, buff.begin);
+        uninit_move(buff.alloc(), pos, end_, buff.begin + (pos - begin_ + 1));
+        std::swap(begin_, buff.begin);
+        std::swap(end_, buff.end);
+        std::swap(end_cap(), buff.end_cap());
+    }
+
     template<typename InputIt, typename OutIt>
-    static void uninit_move(allocator_type& alloc, InputIt b, InputIt e, OutIt res) {
-        while (b != e) {
-            allocator_traits::construct(alloc, res++, std::move_if_noexcept(*(b++)));
+    static void uninit_move(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
+        while (begin != end) {
+            allocator_traits::construct(alloc, res++, std::move_if_noexcept(*(begin++)));
         }
     }
 
@@ -224,6 +222,33 @@ private:
             allocator_traits::construct(alloc, begin++, val);
         }
         return begin;
+    }
+
+    void check_reserve() {
+        if (end_ == end_cap()) {
+            reserve(expand(size()));
+        }
+    }
+
+    template<typename U>
+    void unsafe_push_back(U&& elem) {
+        allocator_traits::construct(alloc(), end_, std::forward<U>(elem));
+        ++end_;
+    }
+
+    template<typename U>
+    iterator insert_impl(difference_type pos, U&& value) {
+        if (size() == capacity()) {
+            split_buffer<value_type, allocator_type&> buff(size() + 1, expand(size()), alloc());
+            allocator_traits::construct(alloc(), buff.begin + pos, std::forward<U>(value));
+            swap_out_buffer(buff, begin_ + pos);
+        } else {
+            unsafe_push_back(std::forward<U>(value));
+            if (static_cast<size_type>(pos) != size()) {
+                std::rotate(rbegin(), rbegin() + 1, rend() - pos);
+            }
+        }
+        return begin() + pos;
     }
 
 private:

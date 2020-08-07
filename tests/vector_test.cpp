@@ -42,12 +42,14 @@ TEST(VectorTest, ChangeLastElement) {
         test_type::init();
         dl::vector<test_type> vec;
         vec.push_back(test_type());
-        ASSERT_EQ(vec.size(), cast(1));
-        ASSERT_EQ(vec.capacity(), cast(1));
+        vec.push_back(test_type());
+        vec.push_back(test_type());
+        ASSERT_EQ(vec.size(), cast(3));
+        ASSERT_EQ(vec.capacity(), cast(4));
     }
-    ASSERT_TRUE(check_test_type(1, 0, 1, 0, 0, 2));
+    ASSERT_TRUE(check_test_type(3, 0, 6, 0, 0, 9));
 
-    { // lvalue, expand capacity
+    { // lvalue
         test_type::init();
         dl::vector<test_type> vec;
         test_type temp;
@@ -57,10 +59,6 @@ TEST(VectorTest, ChangeLastElement) {
         ASSERT_EQ(vec.size(), cast(3));
         ASSERT_EQ(vec.capacity(), cast(4));
     }
-    ASSERT_EQ(cast(3), test_type_exception::copy_lval_construct);
-    ASSERT_EQ(cast(3), test_type_exception::move_rval_construct);
-    ASSERT_EQ(cast(7), test_type_exception::destruct);
-
     ASSERT_TRUE(check_test_type(1, 3, 3, 0, 0, 7));
 
     { // don't use move has't noexcept
@@ -112,6 +110,14 @@ TEST(VectorTest, Iterator) {
 
     ASSERT_EQ(it - vec.begin(), 2);
     ASSERT_TRUE(vec.begin() < it);
+
+    auto reverse_data = {3, 2, 1};
+    auto b1 = vec.rbegin();
+    auto b2 = reverse_data.begin();
+    while (b1 != vec.rend()) {
+        ASSERT_EQ(*b1++, *b2++);
+    }
+
 }
 
 TEST(VectorTest, reserve) {
@@ -197,4 +203,50 @@ TEST(VectorTest, compare) {
 
     ASSERT_FALSE(a < b);
     ASSERT_FALSE(b > a);
+}
+
+TEST(VectorTest, insert) {
+    { // push_back
+        dl::vector<int> vec;
+        auto it = vec.insert(vec.end(), 1);
+        dl::vector<int> res;
+        res.push_back(1);
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(it, vec.begin());
+    }
+    { // expand capacity
+        dl::vector<int> vec{1, 2, 4};
+        auto it = vec.insert(vec.end() - 1, 3);
+        dl::vector<int> res{1, 2, 3, 4};
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(it, vec.end() - 2);
+        ASSERT_EQ(vec.capacity(), cast(6));
+        ASSERT_EQ(vec.size(), cast(4));
+    }
+    { // keep capacity
+        dl::vector<int> vec{1, 2, 4};
+        vec.reserve(5);
+        auto it1 = vec.insert(vec.end() - 1, 3);
+        ASSERT_EQ(it1, vec.end() - 2);
+
+        auto it2 = vec.insert(vec.begin() + 1, 10);
+        ASSERT_EQ(it2, vec.begin() + 1);
+
+        ASSERT_EQ(vec.capacity(), cast(5));
+        ASSERT_EQ(vec.size(), cast(5));
+
+        dl::vector<int> res{1, 10, 2, 3, 4};
+        ASSERT_EQ(vec, res);
+    }
+    { // some insert;
+        dl::vector<int> vec;
+        vec.insert(vec.begin(), 1);
+        vec.insert(vec.begin(), 2);
+        vec.insert(vec.begin(), 3);
+        vec.insert(vec.begin(), 4);
+        dl::vector<int> res{4, 3, 2, 1};
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(vec.capacity(), cast(4));
+        ASSERT_EQ(vec.size(), cast(4));
+    }
 }
