@@ -161,6 +161,11 @@ public:
         return insert_impl(pos - begin(), std::move(value));
     }
 
+    template<class InputIt>
+    iterator insert(const_iterator pos, InputIt first, InputIt last) {
+
+    }
+
     void swap(vector& other) noexcept {
         std::swap(begin_, other.begin_);
         std::swap(end_, other.end_);
@@ -194,7 +199,32 @@ private:
         std::swap(end_, buff.end);
         std::swap(end_cap(), buff.end_cap());
     }
+    void check_reserve() {
+        if (end_ == end_cap()) {
+            reserve(expand(size()));
+        }
+    }
 
+    template<typename U>
+    void unsafe_push_back(U&& elem) {
+        allocator_traits::construct(alloc(), end_, std::forward<U>(elem));
+        ++end_;
+    }
+
+    template<typename U>
+    iterator insert_impl(difference_type pos, U&& value) {
+        if (size() == capacity()) {
+            split_buffer<value_type, allocator_type&> buff(size(), expand(size()), alloc());
+            swap_out_buffer(buff, begin_ + pos);
+        } else {
+            std::move_backward(begin_ + pos, end_, end_ + 1);
+        }
+        allocator_traits::construct(alloc(), begin_ + pos, std::forward<U>(value));
+        ++end_;
+        return begin() + pos;
+    }
+
+private:
     template<typename InputIt, typename OutIt>
     static void uninit_move(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
         while (begin != end) {
@@ -222,33 +252,6 @@ private:
             allocator_traits::construct(alloc, begin++, val);
         }
         return begin;
-    }
-
-    void check_reserve() {
-        if (end_ == end_cap()) {
-            reserve(expand(size()));
-        }
-    }
-
-    template<typename U>
-    void unsafe_push_back(U&& elem) {
-        allocator_traits::construct(alloc(), end_, std::forward<U>(elem));
-        ++end_;
-    }
-
-    template<typename U>
-    iterator insert_impl(difference_type pos, U&& value) {
-        if (size() == capacity()) {
-            split_buffer<value_type, allocator_type&> buff(size() + 1, expand(size()), alloc());
-            allocator_traits::construct(alloc(), buff.begin + pos, std::forward<U>(value));
-            swap_out_buffer(buff, begin_ + pos);
-        } else {
-            unsafe_push_back(std::forward<U>(value));
-            if (static_cast<size_type>(pos) != size()) {
-                std::rotate(rbegin(), rbegin() + 1, rend() - pos);
-            }
-        }
-        return begin() + pos;
     }
 
 private:

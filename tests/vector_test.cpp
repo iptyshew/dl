@@ -206,6 +206,17 @@ TEST(VectorTest, compare) {
 }
 
 TEST(VectorTest, insert) {
+    { // some insert;
+        dl::vector<int> vec;
+        vec.insert(vec.begin(), 1);
+        vec.insert(vec.begin(), 2);
+        vec.insert(vec.begin(), 3);
+        vec.insert(vec.begin(), 4);
+        dl::vector<int> res{4, 3, 2, 1};
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(vec.capacity(), cast(4));
+        ASSERT_EQ(vec.size(), cast(4));
+    }
     { // push_back
         dl::vector<int> vec;
         auto it = vec.insert(vec.end(), 1);
@@ -238,15 +249,11 @@ TEST(VectorTest, insert) {
         dl::vector<int> res{1, 10, 2, 3, 4};
         ASSERT_EQ(vec, res);
     }
-    { // some insert;
-        dl::vector<int> vec;
-        vec.insert(vec.begin(), 1);
-        vec.insert(vec.begin(), 2);
-        vec.insert(vec.begin(), 3);
-        vec.insert(vec.begin(), 4);
-        dl::vector<int> res{4, 3, 2, 1};
-        ASSERT_EQ(vec, res);
-        ASSERT_EQ(vec.capacity(), cast(4));
-        ASSERT_EQ(vec.size(), cast(4));
+    {
+        dl::vector<test_type> vec{test_type(), test_type(), test_type()};
+        vec.reserve(4);
+        test_type::init();
+        vec.insert(vec.begin() + 1, test_type());
+        ASSERT_TRUE(check_test_type(1, 0, 1, 0, 2, 1));
     }
 }
