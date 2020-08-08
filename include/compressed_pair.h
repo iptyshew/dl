@@ -11,7 +11,11 @@ class compressed_pair_elem
 {
 public:
     compressed_pair_elem() = default;
-    compressed_pair_elem(T&& t) : elem(std::forward<T>(t)) {}
+
+    template<typename U>
+    compressed_pair_elem(U&& t) :
+        elem(std::forward<U>(t)) {}
+
     const T& get() const { return elem; };
     T& get() { return elem; };
 private:
@@ -23,7 +27,12 @@ class compressed_pair_elem<T, num, true> : private T
 {
 public:
     compressed_pair_elem() = default;
-    compressed_pair_elem(T&& t) { *this = std::forward<T>(t); }
+
+    template<typename U>
+    compressed_pair_elem(U&& t)
+        : T(std::forward<U>(t)) {
+    }
+
     const T& get() const { return *this; };
     T& get() { return *this; };
 };
@@ -40,9 +49,11 @@ public:
 
 public:
     compressed_pair() : Base1(), Base2() {}
-    compressed_pair(T1&& first, T2&& second)
-        : Base1(std::forward<T1>(first))
-        , Base2(std::forward<T2>(second)) {}
+
+    template<typename U1, typename U2>
+    compressed_pair(U1&& first, U2&& second)
+        : Base1(std::forward<U1>(first))
+        , Base2(std::forward<U2>(second)) {}
 
     const T1& first() const { return Base1::get(); }
     const T2& second() const { return Base2::get(); }

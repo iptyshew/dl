@@ -16,42 +16,107 @@ class vector
 {
 public:
     using value_type = T;
-    using size_type = size_t;
-    using difference_type = std::ptrdiff_t;
-
-    using reference = value_type&;
-    using const_reference = const value_type&;
     using allocator_type = Allocator;
     using allocator_traits = std::allocator_traits<allocator_type>;
     using pointer = typename allocator_traits::pointer;
     using const_pointer = typename allocator_traits::const_pointer;
+    using reference = value_type&;
+    using const_reference = const value_type&;
+
+    using size_type = size_t;
+    using difference_type = std::ptrdiff_t;
     using iterator = pointer;
     using const_iterator = const_pointer;
+
     using reverse_iterator = std::reverse_iterator<iterator>;
     using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
 public: // constructors
-    vector() = default;
+    vector() noexcept = default;
 
-    vector(std::initializer_list<value_type> list) {
-        assign(list.begin(), list.end());
+    vector(const Allocator& alloc) noexcept
+        : end_cap_allocator_(nullptr, alloc) {}
+
+    explicit vector(size_type count, const Allocator& a = Allocator())
+        : vector(a) {
+        allocate_n(count);
+        construct_at_end(count);
     }
 
-public: // simple members, operators
-    const value_type* data() const noexcept { return begin_; }
-    value_type* data() noexcept             { return begin_; }
+    vector(size_type count, const T& value, const Allocator& a = Allocator())
+        : vector(a) {
+        allocate_n(count);
+        construct_at_end(count, value);
+    }
+
+    template<typename InputIt>
+    vector(InputIt first, InputIt last, const Allocator& a = Allocator())
+        : vector(a) {
+        allocate_n(std::distance(first, last));
+        construct_at_end(first, last);
+    }
+
+    vector(std::initializer_list<value_type> list)
+        : vector(list.begin(), list.end()) {
+    }
+
+    vector(std::initializer_list<value_type> list, const Allocator& a)
+        : vector(a) {
+        allocate_n(list.size());
+        construct_at_end(list.begin(), list.end());
+    }
+
+    vector(const vector& other)
+        : vector(allocator_traits::select_on_container_copy_construction(other.alloc())) {
+        allocate_n(other.capacity());
+        construct_at_end(other.begin_, other.end_);
+    }
+
+    vector(const vector& other, const Allocator& a)
+        : vector(a) {
+        allocate_n(other.capacity());
+        construct_at_end(other.begin_, other.end_);
+    }
+
+    vector(vector&& other)
+        : vector(std::move(other.alloc())) {
+        begin_ = other.begin_;
+        end_ = other.end_;
+        end_cap() = other.end_cap();
+        other.begin_ = other.end_ = other.end_cap() = nullptr;
+    }
+
+    vector(vector&& other, const Allocator& a)
+        : vector(a) {
+        if (other.alloc() == a) {
+            begin_ = other.begin_;
+            end_ = other.end_;
+            end_cap() = other.end_cap();
+            other.begin_ = other.end_ = other.end_cap() = nullptr;
+        } else {
+            assign(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
+        }
+    }
+
+public:
+    const T* data() const noexcept { return begin_; }
+    T* data() noexcept             { return begin_; }
 
     iterator begin() noexcept { return begin_; }
     iterator end() noexcept   { return end_; }
 
     const_iterator begin() const noexcept { return begin_; }
     const_iterator end() const noexcept   { return end_; }
+    const_iterator cbegin() const noexcept { return begin(); }
+    const_iterator cend() const noexcept   { return end(); }
 
     reverse_iterator rbegin() noexcept { return std::make_reverse_iterator(end_);   }
     reverse_iterator rend() noexcept   { return std::make_reverse_iterator(begin_); }
 
     const_reverse_iterator rbegin() const noexcept { return std::make_reverse_iterator(end_);   }
     const_reverse_iterator rend() const noexcept   { return std::make_reverse_iterator(begin_); }
+    const_reverse_iterator crbegin() const noexcept { return rbegin(); }
+    const_reverse_iterator crend() const noexcept   { return rend();   }
 
     const_reference operator[](size_type i) const noexcept{ return begin_[i]; }
     reference operator[](size_type i) noexcept            { return begin_[i]; }
@@ -78,6 +143,10 @@ public: // simple members, operators
         if (i >= size())
             throw std::out_of_range("vector index out of bounds");
         return begin_[i];
+    }
+
+    allocator_type get_allocator() const noexcept {
+        return alloc();
     }
 
 public:
@@ -163,7 +232,13 @@ public:
 
     template<class InputIt>
     iterator insert(const_iterator pos, InputIt first, InputIt last) {
+        auto len = std::distance(first, last);
+        if (size() == capacity()) {
+            split_buffer<value_type, allocator_type&> buff(size() + len, expand(size()), alloc());
+            swap_out_buffer(buff, begin_ + pos);
+        } else {
 
+        }
     }
 
     void swap(vector& other) noexcept {
@@ -180,7 +255,8 @@ public:
 private:
     static size_t expand(size_t sz) { return (sz == 0) ? 1 : sz * 2; }
 
-    allocator_type& alloc() { return end_cap_allocator_.second(); }
+    allocator_type& alloc()             { return end_cap_allocator_.second(); }
+    const allocator_type& alloc() const { return end_cap_allocator_.second(); }
 
     pointer& end_cap()             { return end_cap_allocator_.first(); }
     const pointer& end_cap() const { return end_cap_allocator_.first(); }
@@ -224,12 +300,43 @@ private:
         return begin() + pos;
     }
 
+    void allocate_n(size_type n) {
+        end_ = begin_ = allocator_traits::allocate(alloc(), n);
+        end_cap() = begin_ + n;
+    }
+
+    void construct_at_end(size_t n) {
+        while (n-- != 0) {
+            allocator_traits::construct(alloc(), end_++);
+        }
+    }
+
+    void construct_at_end(size_t n, const_reference value) {
+        while (n-- != 0) {
+            allocator_traits::construct(alloc(), end_++, value);
+        }
+    }
+
+    template<typename InputIt>
+    void construct_at_end(InputIt first, InputIt last) {
+        end_ = uninit_copy(alloc(), first, last, end_);
+    }
+
 private:
     template<typename InputIt, typename OutIt>
-    static void uninit_move(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
+    static OutIt uninit_move(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
         while (begin != end) {
             allocator_traits::construct(alloc, res++, std::move_if_noexcept(*(begin++)));
         }
+        return res;
+    }
+
+    template<typename InputIt, typename OutIt>
+    static OutIt uninit_copy(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
+        while (begin != end) {
+            allocator_traits::construct(alloc, res++, *(begin++));
+        }
+        return res;
     }
 
     static pointer destroy_range(allocator_type& alloc, pointer begin, pointer end) {

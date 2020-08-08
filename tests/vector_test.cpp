@@ -37,6 +37,50 @@ TEST(VectorTest, Basic) {
     ASSERT_EQ(vec.size(), cast(0));
 }
 
+TEST(VectorTest, Constructors) {
+    {
+        dl::vector<int> vec(3);
+        ASSERT_EQ(vec.size(), cast(3));
+        ASSERT_EQ(vec.capacity(), cast(3));
+        dl::vector<int> res{0, 0, 0};
+        ASSERT_EQ(vec, res);
+    }
+    {
+        dl::vector<int> vec(cast(3), 3);
+        ASSERT_EQ(vec.size(), cast(3));
+        ASSERT_EQ(vec.capacity(), cast(3));
+        dl::vector<int> res{3, 3, 3};
+        ASSERT_EQ(vec, res);
+    }
+    {
+        auto list = {1, 2, 3};
+        dl::vector<int> vec(list.begin(), list.end());
+        ASSERT_EQ(vec.size(), cast(3));
+        ASSERT_EQ(vec.capacity(), cast(3));
+        dl::vector<int> res{1, 2, 3};
+        ASSERT_EQ(vec, res);
+    }
+    {
+        dl::vector<int> temp{1, 2, 3};
+        dl::vector<int> vec(temp);
+        ASSERT_EQ(vec.size(), cast(3));
+        ASSERT_EQ(vec.capacity(), cast(3));
+        dl::vector<int> res{1, 2, 3};
+        ASSERT_EQ(vec, res);
+    }
+    {
+        dl::vector<int> temp{1, 2, 3};
+        dl::vector<int> vec(std::move(temp));
+        ASSERT_EQ(vec.size(), cast(3));
+        ASSERT_EQ(vec.capacity(), cast(3));
+
+        ASSERT_EQ(temp.size(), cast(0));
+        ASSERT_EQ(temp.capacity(), cast(0));
+        dl::vector<int> res{1, 2, 3};
+        ASSERT_EQ(vec, res);
+    }
+}
+
 TEST(VectorTest, ChangeLastElement) {
     { // rvalue
         test_type::init();
@@ -95,29 +139,37 @@ TEST(VectorTest, ChangeLastElement) {
 }
 
 TEST(VectorTest, Iterator) {
-    dl::vector<int> vec;
-    ASSERT_EQ(vec.begin(), vec.end());
+    {
+        dl::vector<int> vec{1, 2, 3};
+        auto it = vec.begin();
 
-    vec.assign({1, 2, 3,});
-    auto it = vec.begin();
+        ASSERT_EQ(++it, vec.begin() + 1);
+        ASSERT_EQ(it++, vec.begin() + 1);
+        ASSERT_EQ(it, vec.begin() + 2);
+        ASSERT_EQ(*it, vec.begin()[2]);
+        ASSERT_EQ(it + 1, vec.end());
+        ASSERT_EQ(it - 2, vec.begin());
 
-    ASSERT_EQ(++it, vec.begin() + 1);
-    ASSERT_EQ(it++, vec.begin() + 1);
-    ASSERT_EQ(it, vec.begin() + 2);
-    ASSERT_EQ(*it, vec.begin()[2]);
-    ASSERT_EQ(it + 1, vec.end());
-    ASSERT_EQ(it - 2, vec.begin());
+        ASSERT_EQ(it - vec.begin(), 2);
+        ASSERT_TRUE(vec.begin() < it);
 
-    ASSERT_EQ(it - vec.begin(), 2);
-    ASSERT_TRUE(vec.begin() < it);
-
-    auto reverse_data = {3, 2, 1};
-    auto b1 = vec.rbegin();
-    auto b2 = reverse_data.begin();
-    while (b1 != vec.rend()) {
-        ASSERT_EQ(*b1++, *b2++);
+        auto reverse_list = {3, 2, 1};
+        auto b1 = vec.rbegin();
+        auto b2 = reverse_list.begin();
+        while (b1 != vec.rend()) {
+            ASSERT_EQ(*b1++, *b2++);
+        }
+        vec.clear();
+        ASSERT_EQ(vec.begin(), vec.end());
     }
+    {
+        const dl::vector<int> vec{1, 2, 3};
+        ASSERT_EQ(vec.cbegin(), vec.begin());
+        ASSERT_EQ(vec.crbegin(), vec.rbegin());
 
+        ASSERT_EQ(vec.cend(), vec.end());
+        ASSERT_EQ(vec.crend(), vec.rend());
+    }
 }
 
 TEST(VectorTest, reserve) {
