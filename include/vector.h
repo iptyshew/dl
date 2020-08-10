@@ -5,6 +5,7 @@
 #include <iterator>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include "compressed_pair.h"
 #include "split_buffer.h"
@@ -49,7 +50,10 @@ public: // constructors
         construct_at_end(count, value);
     }
 
-    template<typename InputIt>
+    template<typename InputIt,
+             typename = std::enable_if_t<
+                 std::is_base_of_v<std::forward_iterator_tag,
+                                   typename std::iterator_traits<InputIt>::iterator_category>>>
     vector(InputIt first, InputIt last, const Allocator& a = Allocator())
         : vector(a) {
         allocate_n(std::distance(first, last));
