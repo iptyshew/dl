@@ -9,6 +9,7 @@
 #include <utility>
 #include "compressed_pair.h"
 #include "split_buffer.h"
+#include "type_utils.h"
 
 namespace dl {
 
@@ -50,14 +51,24 @@ public: // constructors
         construct_at_end(count, value);
     }
 
-    template<typename InputIt,
-             typename = std::enable_if_t<
-                 std::is_base_of_v<std::forward_iterator_tag,
-                                   typename std::iterator_traits<InputIt>::iterator_category>>>
-    vector(InputIt first, InputIt last, const Allocator& a = Allocator())
+    template<typename InputIt>
+    vector(InputIt first,
+           typename std::enable_if_t<is_forward_iter<InputIt>::value, InputIt> last,
+           const Allocator& a = Allocator())
         : vector(a) {
         allocate_n(std::distance(first, last));
         construct_at_end(first, last);
+    }
+
+    template<typename InputIt>
+    vector(InputIt first,
+           typename std::enable_if_t<is_input_iter<InputIt>::value &&
+                                    !is_forward_iter<InputIt>::value, InputIt> last,
+           const Allocator& a = Allocator())
+        : vector(a) {
+        for (;first != last; ++first) {
+            emplace_back(*first);
+        }
     }
 
     vector(std::initializer_list<value_type> list)

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <gtest/gtest.h>
+#include <iterator>
 #include "vector.h"
 #include "test_type.h"
 
@@ -46,7 +47,7 @@ TEST(VectorTest, Constructors) {
         ASSERT_EQ(vec, res);
     }
     {
-        dl::vector<int> vec(cast(3), 3);
+        dl::vector<int> vec(3, 3);
         ASSERT_EQ(vec.size(), cast(3));
         ASSERT_EQ(vec.capacity(), cast(3));
         dl::vector<int> res{3, 3, 3};
@@ -77,6 +78,15 @@ TEST(VectorTest, Constructors) {
         ASSERT_EQ(temp.size(), cast(0));
         ASSERT_EQ(temp.capacity(), cast(0));
         dl::vector<int> res{1, 2, 3};
+        ASSERT_EQ(vec, res);
+    }
+    {
+        std::stringstream stream;
+        stream << "1" << " 2";
+        std::istream_iterator<int> first(stream);
+        std::istream_iterator<int> last;
+        dl::vector<int> vec(first, last);
+        dl::vector<int> res{1, 2};
         ASSERT_EQ(vec, res);
     }
 }
