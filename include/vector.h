@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -16,7 +17,7 @@ namespace dl {
 template<typename T, typename Allocator = std::allocator<T>>
 class vector
 {
-public:
+public: // aliases
     using value_type = T;
     using allocator_type = Allocator;
     using allocator_traits = std::allocator_traits<allocator_type>;
@@ -41,14 +42,12 @@ public: // constructors
 
     explicit vector(size_type count, const Allocator& a = Allocator())
         : vector(a) {
-        allocate_n(count);
-        construct_at_end(count);
+        create(count);
     }
 
     vector(size_type count, const T& value, const Allocator& a = Allocator())
         : vector(a) {
-        allocate_n(count);
-        construct_at_end(count, value);
+        create(count, value);
     }
 
     template<typename InputIt>
@@ -56,8 +55,7 @@ public: // constructors
            typename std::enable_if_t<is_forward_iter<InputIt>::value, InputIt> last,
            const Allocator& a = Allocator())
         : vector(a) {
-        allocate_n(std::distance(first, last));
-        construct_at_end(first, last);
+        create(first, last);
     }
 
     template<typename InputIt>
@@ -66,31 +64,24 @@ public: // constructors
                                     !is_forward_iter<InputIt>::value, InputIt> last,
            const Allocator& a = Allocator())
         : vector(a) {
-        for (;first != last; ++first) {
+        for (; first != last; ++first) {
             emplace_back(*first);
         }
     }
 
-    vector(std::initializer_list<value_type> list)
-        : vector(list.begin(), list.end()) {
-    }
-
-    vector(std::initializer_list<value_type> list, const Allocator& a)
-        : vector(a) {
-        allocate_n(list.size());
-        construct_at_end(list.begin(), list.end());
+    vector(std::initializer_list<value_type> list, const Allocator& a = Allocator())
+        : end_cap_allocator_(nullptr, a) {
+        create(list.begin(), list.end());
     }
 
     vector(const vector& other)
         : vector(allocator_traits::select_on_container_copy_construction(other.alloc())) {
-        allocate_n(other.capacity());
-        construct_at_end(other.begin_, other.end_);
+        create(other.begin_, other.end_);
     }
 
     vector(const vector& other, const Allocator& a)
         : vector(a) {
-        allocate_n(other.capacity());
-        construct_at_end(other.begin_, other.end_);
+        create(other.begin_, other.end_);
     }
 
     vector(vector&& other)
@@ -109,7 +100,7 @@ public: // constructors
             end_cap() = other.end_cap();
             other.begin_ = other.end_ = other.end_cap() = nullptr;
         } else {
-            assign(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
+            create(std::make_move_iterator(other.begin()), std::make_move_iterator(other.end()));
         }
     }
 
@@ -170,34 +161,38 @@ public: // assigns
                 std::enable_if_t<is_forward_iter<InputIt>::value, InputIt> last) {
         auto n = static_cast<size_type>(std::distance(first, last));
         if (n > capacity()) {
-            clear();
-            allocator_traits::deallocate(alloc(), begin_, capacity());
-            allocate_n(n);
-            construct_at_end(first, last);
+            clear_and_free();
+            create(first, last, n);
         } else if (n < size()) {
-            for (auto it = begin_; first != last; ++first, ++it) {
-                *it = *first;
-            }
-            end_ = destroy_range(alloc(), begin_ + n, end_);
+            end_ = clear(std::copy(first, last, begin_), end_);
         } else if (n > size()) {
             for (auto it = begin_; it != end_; ++it, ++first) {
                 *it = *first;
             }
-            construct_at_end(first, last);
+            end_ = uninit_copy(alloc(), first, last, end_);
         }
     }
 
-    void assign(std::initializer_list<value_type> ilist) {
-        assign(ilist.begin(), ilist.end());
+    void assign(std::initializer_list<value_type> list) {
+        assign(list.begin(), list.end());
     }
 
-    void assign(size_type count, const T& value) {
-
+    void assign(size_type n, const value_type& value) {
+        if (n > capacity()) {
+            clear_and_free();
+            create(n, value);
+        } else if (n < size()) {
+            std::fill(begin_, begin_ + n, value);
+            end_ = clear(begin_ + n, end_);
+        } else if (n > size()) {
+            std::fill(begin_, end_, value);
+            end_ = construct_range(alloc(), end_, begin_ + n, value);
+        }
     }
 
 public: // other modification members
     void clear() noexcept {
-        end_ = destroy_range(alloc(), begin_, end_);
+        end_ = clear(begin_, end_);
     }
 
     void reserve(size_type n) {
@@ -214,7 +209,7 @@ public: // other modification members
             construct_range(buff.alloc(), buff.begin + sz, buff.end);
             swap_out_buffer(buff);
         } else if (n < sz) {
-            end_ = destroy_range(alloc(), begin_ + n, end_);
+            end_ = clear(begin_ + n, end_);
         } else if (n > sz) {
             end_ = construct_range(alloc(), begin_ + sz, begin_ + n);
         }
@@ -227,7 +222,7 @@ public: // other modification members
             construct_range(buff.alloc(), buff.begin + sz, buff.end, value);
             swap_out_buffer(buff);
         } else if (n < sz) {
-            end_ = destroy_range(alloc(), begin_ + n, end_);
+            end_ = clear(begin_ + n, end_);
         } else if (n > sz) {
             end_ = construct_range(alloc(), begin_ + sz, begin_ + n, value);
         }
@@ -235,12 +230,12 @@ public: // other modification members
 
     void push_back(const_reference elem) {
         check_reserve();
-        unsafe_push_back(elem);
+        unsafe_insert(end_, elem);
     }
 
     void push_back(value_type&& elem) {
         check_reserve();
-        unsafe_push_back(std::move(elem));
+        unsafe_insert(end_, std::move(elem));
     }
 
     template<typename... Args>
@@ -256,23 +251,16 @@ public: // other modification members
         --end_;
     }
 
-    iterator insert(const_iterator pos, const T& value) {
+    iterator insert(const_iterator pos, const value_type& value) {
         return insert_impl(pos - begin(), value);
     }
 
-    iterator insert(const_iterator pos, T&& value) {
+    iterator insert(const_iterator pos, value_type&& value) {
         return insert_impl(pos - begin(), std::move(value));
     }
 
     template<class InputIt>
     iterator insert(const_iterator pos, InputIt first, InputIt last) {
-        auto len = std::distance(first, last);
-        if (size() == capacity()) {
-            split_buffer<value_type, allocator_type&> buff(size() + len, expand(size() + 1), alloc());
-            swap_out_buffer(buff, begin_ + pos);
-        } else {
-
-        }
     }
 
     void swap(vector& other) noexcept {
@@ -282,8 +270,7 @@ public: // other modification members
     }
 
     ~vector() {
-        clear();
-        allocator_traits::deallocate(alloc(), begin_, capacity());
+        clear_and_free();
     }
 
 private:
@@ -311,6 +298,7 @@ private:
         std::swap(end_, buff.end);
         std::swap(end_cap(), buff.end_cap());
     }
+
     void check_reserve() {
         if (end_ == end_cap()) {
             reserve(expand(size() + 1));
@@ -318,8 +306,8 @@ private:
     }
 
     template<typename U>
-    void unsafe_push_back(U&& elem) {
-        allocator_traits::construct(alloc(), end_, std::forward<U>(elem));
+    void unsafe_insert(pointer p, U&& elem) {
+        allocator_traits::construct(alloc(), p, std::forward<U>(elem));
         ++end_;
     }
 
@@ -331,8 +319,7 @@ private:
         } else {
             std::move_backward(begin_ + pos, end_, end_ + 1);
         }
-        allocator_traits::construct(alloc(), begin_ + pos, std::forward<U>(value));
-        ++end_;
+        unsafe_insert(begin_ + pos, std::forward<U>(value));
         return begin() + pos;
     }
 
@@ -341,45 +328,53 @@ private:
         end_cap() = begin_ + n;
     }
 
-    void construct_at_end(size_t n) {
+    void create(size_t n) {
+        allocate_n(n);
         for (; n != 0; --n, ++end_) {
             allocator_traits::construct(alloc(), end_);
         }
     }
 
-    void construct_at_end(size_t n, const_reference value) {
-        for (; n != 0; --n, ++end_) {
-            allocator_traits::construct(alloc(), end_, value);
+    void create(size_t n, const_reference value) {
+        allocate_n(n);
+        while (n-- != 0) {
+            unsafe_insert(end_, value);
         }
     }
 
     template<typename InputIt>
-    void construct_at_end(InputIt first, InputIt last) {
+    void create(InputIt first, InputIt last, std::optional<size_type> n = std::nullopt) {
+        allocate_n(n ? *n : std::distance(first, last));
         end_ = uninit_copy(alloc(), first, last, end_);
+    }
+
+    void clear_and_free() {
+        clear();
+        allocator_traits::deallocate(alloc(), begin_, capacity());
+    }
+
+    pointer clear(pointer begin, pointer end) {
+        for (auto it = begin; it != end; ++it) {
+            allocator_traits::destroy(alloc(), it);
+        }
+        return begin;
     }
 
 private:
     template<typename InputIt, typename OutIt>
     static OutIt uninit_move(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
-        for (; begin != end; ++begin) {
-            allocator_traits::construct(alloc, res++, std::move_if_noexcept(*begin));
+        for (; begin != end; ++begin, ++res) {
+            allocator_traits::construct(alloc, res, std::move_if_noexcept(*begin));
         }
         return res;
     }
 
     template<typename InputIt, typename OutIt>
     static OutIt uninit_copy(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
-        while (begin != end) {
-            allocator_traits::construct(alloc, res++, *(begin++));
+        for (; begin != end; ++begin, ++res) {
+            allocator_traits::construct(alloc, res, *begin);
         }
         return res;
-    }
-
-    static pointer destroy_range(allocator_type& alloc, pointer begin, pointer end) {
-        for (auto it = begin; it != end; ++it) {
-            allocator_traits::destroy(alloc, it);
-        }
-        return begin;
     }
 
     static pointer construct_range(allocator_type& alloc, pointer begin, pointer end) {
