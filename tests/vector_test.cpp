@@ -19,7 +19,7 @@ bool check_trace(size_t bc, size_t clc, size_t mrc, size_t olc, size_t orc, size
         trace_int::destruct == d;
 }
 
-auto makeVector(std::initializer_list<int> l) {
+auto makeVector(std::initializer_list<int> l = {}) {
     return dl::vector<trace_int>(l.begin(), l.end());
 }
 
@@ -264,7 +264,7 @@ TEST(VectorTest, compare) {
     ASSERT_FALSE(b > a);
 }
 
-TEST(VectorTest, insert) {
+TEST(VectorTest, insert) { // \todo check std::vector
     { // some insert;
         dl::vector<trace_int> vec;
         trace_int v1(1), v2(2), v3(3), v4(4);
@@ -292,32 +292,37 @@ TEST(VectorTest, insert) {
     }
 }
 
-// TEST(VectorTest, assign) {
-//     { // assign count > capacity
-//         dl::vector<int> vec;
-//         vec.reserve(2);
-//         dl::vector<int> res{1, 2, 3};
-//         vec.assign(res.begin(), res.end());
-//         ASSERT_EQ(vec.size(), cast(3));
-//         ASSERT_EQ(vec.capacity(), cast(3));
-//         ASSERT_EQ(vec, res);
-//     }
-//     { // assign count < size
-//         dl::vector<int> vec{1, 2, 3};
-//         vec.reserve(4);
-//         dl::vector<int> res{1, 2};
-//         vec.assign(res.begin(), res.end());
-//         ASSERT_EQ(vec.size(), res.size());
-//         ASSERT_EQ(vec.capacity(), cast(4));
-//         ASSERT_EQ(vec, res);
-//     }
-//     { // assign count > size, but < capacity
-//         dl::vector<int> vec{1, 2, 3};
-//         vec.reserve(5);
-//         dl::vector<int> res{1, 2, 3, 4};
-//         vec.assign(res.begin(), res.end());
-//         ASSERT_EQ(vec.size(), res.size());
-//         ASSERT_EQ(vec.capacity(), cast(5));
-//         ASSERT_EQ(vec, res);
-//     }
-// }
+TEST(VectorTest, assign) {
+    { // assign: count > size, capacity
+        auto vec = makeVector({1, 2});
+        auto res = makeVector({1, 2, 3});
+        auto old_size = vec.size();
+        trace_int::init();
+        vec.assign(res.begin(), res.end());
+        ASSERT_TRUE(check_trace(0, res.size(), 0, 0, 0, old_size) &&
+                    vec.size() == vec.capacity() &&
+                    vec.size() == res.size());
+        ASSERT_EQ(vec, res);
+    }
+    { // assign: count < size, capacity
+        auto vec = makeVector({1, 2, 3});
+        vec.reserve(4);
+        auto res = makeVector({1, 2});
+        trace_int::init();
+        vec.assign(res.begin(), res.end());
+        ASSERT_TRUE(check_trace(0, 0, 0, res.size(), 0, 1) &&
+                    vec.size() == 2 &&
+                    vec.capacity() == 4);
+        ASSERT_EQ(vec, res);
+    }
+    { // assign: size < count < capacity
+        auto vec = makeVector({1, 2, 3});
+        vec.reserve(5);
+        auto res = makeVector({1, 2, 3, 4});
+        trace_int::init();
+        vec.assign(res.begin(), res.end());
+        ASSERT_TRUE(check_trace(0, 1, 0, 3, 0, 0) &&
+                    vec.capacity() == 5);
+        ASSERT_EQ(vec, res);
+    }
+}

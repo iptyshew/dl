@@ -168,7 +168,7 @@ public: // assigns
     template<typename InputIt>
     void assign(InputIt first,
                 std::enable_if_t<is_forward_iter<InputIt>::value, InputIt> last) {
-        auto n = std::distance(first, last);
+        auto n = static_cast<size_type>(std::distance(first, last));
         if (n > capacity()) {
             clear();
             allocator_traits::deallocate(alloc(), begin_, capacity());
