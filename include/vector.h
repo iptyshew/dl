@@ -210,7 +210,7 @@ public: // other modification members
     void resize(size_type n) {
         auto sz = size();
         if (n > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(n, n, alloc());
+            split_buffer<value_type, allocator_type&> buff(n, expand(n), alloc());
             construct_range(buff.alloc(), buff.begin + sz, buff.end);
             swap_out_buffer(buff);
         } else if (n < sz) {
@@ -223,7 +223,7 @@ public: // other modification members
     void resize(size_type n, const value_type& value) { // \todo :(
         auto sz = size();
         if (n > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(n, n, alloc());
+            split_buffer<value_type, allocator_type&> buff(n, expand(n), alloc());
             construct_range(buff.alloc(), buff.begin + sz, buff.end, value);
             swap_out_buffer(buff);
         } else if (n < sz) {
@@ -268,7 +268,7 @@ public: // other modification members
     iterator insert(const_iterator pos, InputIt first, InputIt last) {
         auto len = std::distance(first, last);
         if (size() == capacity()) {
-            split_buffer<value_type, allocator_type&> buff(size() + len, expand(size()), alloc());
+            split_buffer<value_type, allocator_type&> buff(size() + len, expand(size() + 1), alloc());
             swap_out_buffer(buff, begin_ + pos);
         } else {
 
@@ -287,7 +287,9 @@ public: // other modification members
     }
 
 private:
-    static size_t expand(size_t sz) { return (sz == 0) ? 1 : sz * 2; }
+    size_t expand(size_t new_size) const noexcept {
+        return std::max(new_size, capacity() * 2);
+    }
 
     allocator_type& alloc()             { return end_cap_allocator_.second(); }
     const allocator_type& alloc() const { return end_cap_allocator_.second(); }
@@ -311,7 +313,7 @@ private:
     }
     void check_reserve() {
         if (end_ == end_cap()) {
-            reserve(expand(size()));
+            reserve(expand(size() + 1));
         }
     }
 
@@ -324,7 +326,7 @@ private:
     template<typename U>
     iterator insert_impl(difference_type pos, U&& value) {
         if (size() == capacity()) {
-            split_buffer<value_type, allocator_type&> buff(size(), expand(size()), alloc());
+            split_buffer<value_type, allocator_type&> buff(size(), expand(size() + 1), alloc());
             swap_out_buffer(buff, begin_ + pos);
         } else {
             std::move_backward(begin_ + pos, end_, end_ + 1);
