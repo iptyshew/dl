@@ -267,38 +267,6 @@ TEST(VectorTest, compare) {
     ASSERT_FALSE(b > a);
 }
 
-TEST(VectorTest, insert) {
-    // { // some insert;
-    //     auto vec = makeVector();
-    //     trace_int v1(1), v2(2), v3(3), v4(4);
-    //     trace_int::init();
-    //     vec.insert(vec.begin(), v1);
-    //     vec.insert(vec.begin(), v2);
-    //     vec.insert(vec.begin(), v3);
-    //     vec.insert(vec.begin(), v4);
-    //     ASSERT_EQ(trace_int::basic_construct, 0); // \todo macros?
-    //     ASSERT_EQ(trace_int::copy_lval_construct, 3);
-    //     ASSERT_EQ(trace_int::move_rval_construct, 4);
-    //     ASSERT_EQ(trace_int::operator_rval_construct, 2);
-    //     ASSERT_EQ(trace_int::operator_lval_construct, 1);
-    //     ASSERT_EQ(trace_int::destruct, 3);
-    //     ASSERT_EQ(vec.capacity(), 4);
-    //     auto res = makeVector({4, 3, 2, 1});
-    //     ASSERT_EQ(vec, res);
-    // }
-    // { // push back
-    //     auto vec = makeVector({1, 2});
-    //     trace_int val(3);
-    //     trace_int::init();
-    //     vec.insert(vec.end(), val);
-    //     ASSERT_TRUE(check_trace(0, 1, 2, 0, 0, 2) &&
-    //                 vec.size() == 3 &&
-    //                 vec.capacity() == 4);
-    //     auto res = makeVector({1, 2, 3});
-    //     ASSERT_EQ(vec, res);
-    // }
-}
-
 TEST(VectorTest, assign) {
     { // assign: count > size, capacity
         auto vec = makeVector({1, 2});
@@ -384,5 +352,97 @@ TEST(VectorTest, assign) {
         dl::vector<int> res{1, 2};
         ASSERT_EQ(vec, res);
     }
+}
 
+TEST(VectorTest, erase) {
+    { // erase middle
+        auto vec = makeVector({1, 2, 3, 4});
+        auto res = makeVector({1, 3, 4});
+        trace_int::init();
+        auto next = vec.erase(vec.begin() + 1);
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(next, vec.begin() + 1);
+        ASSERT_TRUE(check_trace(0, 0, 0, 0, 2, 1) &&
+                    vec.capacity() == 4);
+    }
+    { // erase first, last
+        auto vec = makeVector({1, 2, 3, 4});
+        auto res = makeVector({2, 3});
+        auto next = vec.erase(vec.begin());
+        ASSERT_EQ(next, vec.begin());
+        next = vec.erase(vec.end() - 1);
+        ASSERT_EQ(next, vec.end());
+        ASSERT_EQ(vec, res);
+    }
+    { // erase one
+        auto vec = makeVector({1});
+        auto res = makeVector();
+        auto next = vec.erase(vec.begin());
+        ASSERT_EQ(next, vec.end());
+        ASSERT_EQ(vec, res);
+    }
+    { // erase range
+        auto vec = makeVector({1, 2, 3, 4, 5, 6, 7});
+        auto res = makeVector({1, 2, 6, 7});
+        trace_int::init();
+        auto next = vec.erase(vec.begin() + 2, vec.begin() + 5);
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(next, vec.begin() + 2);
+        ASSERT_TRUE(check_trace(0, 0, 0, 0, 2, 3) &&
+                    vec.capacity() == 7);
+    }
+    { // erase range in end
+        auto vec = makeVector({1, 2, 3, 4});
+        auto res = makeVector({1, 2});
+        auto next = vec.erase(vec.begin() + 2, vec.end());
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(next, vec.end());
+    }
+    { // erase range in begin
+        auto vec = makeVector({1, 2, 3, 4});
+        auto res = makeVector({4});
+        auto next = vec.erase(vec.begin(), vec.begin() + 3);
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(next, vec.begin());
+    }
+    { // erase range in begin
+        auto vec = makeVector({1, 2, 3, 4});
+        auto res = makeVector();
+        auto next = vec.erase(vec.begin(), vec.end());
+        ASSERT_EQ(vec, res);
+        ASSERT_EQ(next, vec.end());
+    }
+}
+
+
+TEST(VectorTest, insert) {
+    // { // some insert;
+    //     auto vec = makeVector();
+    //     trace_int v1(1), v2(2), v3(3), v4(4);
+    //     trace_int::init();
+    //     vec.insert(vec.begin(), v1);
+    //     vec.insert(vec.begin(), v2);
+    //     vec.insert(vec.begin(), v3);
+    //     vec.insert(vec.begin(), v4);
+    //     ASSERT_EQ(trace_int::basic_construct, 0); // \todo macros?
+    //     ASSERT_EQ(trace_int::copy_lval_construct, 3);
+    //     ASSERT_EQ(trace_int::move_rval_construct, 4);
+    //     ASSERT_EQ(trace_int::operator_rval_construct, 2);
+    //     ASSERT_EQ(trace_int::operator_lval_construct, 1);
+    //     ASSERT_EQ(trace_int::destruct, 3);
+    //     ASSERT_EQ(vec.capacity(), 4);
+    //     auto res = makeVector({4, 3, 2, 1});
+    //     ASSERT_EQ(vec, res);
+    // }
+    // { // push back
+    //     auto vec = makeVector({1, 2});
+    //     trace_int val(3);
+    //     trace_int::init();
+    //     vec.insert(vec.end(), val);
+    //     ASSERT_TRUE(check_trace(0, 1, 2, 0, 0, 2) &&
+    //                 vec.size() == 3 &&
+    //                 vec.capacity() == 4);
+    //     auto res = makeVector({1, 2, 3});
+    //     ASSERT_EQ(vec, res);
+    // }
 }

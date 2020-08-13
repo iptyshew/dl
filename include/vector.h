@@ -257,11 +257,6 @@ public: // other modification members
         return back();
     }
 
-    void pop_back() {
-        allocator_traits::destroy(alloc(), end_ - 1);
-        --end_;
-    }
-
     iterator insert(const_iterator pos, const value_type& value) {
         return insert_impl(pos - begin(), value);
     }
@@ -273,6 +268,32 @@ public: // other modification members
     template<class I>
     iterator insert(const_iterator pos, I first, I last) {
 
+    }
+
+    template<typename... Args>
+    iterator emplace(const_iterator pos, Args&&... args) {
+        insert_impl(pos - begin(), std::forward<Args>(args)...);
+    }
+
+
+    void pop_back() {
+        allocator_traits::destroy(alloc(), end_ - 1);
+        --end_;
+    }
+
+    iterator erase(const_iterator pos) {
+        auto n = pos - begin();
+        std::move(begin_ + n + 1, end_, begin_ + n);
+        pop_back();
+        return begin() + n;
+    }
+
+    iterator erase(const_iterator first, const_iterator last) {
+        auto f = first - begin();
+        auto l = last - begin();
+        std::move(begin_ + l, end_, begin_ + f);
+        end_ = clear(begin_ + size() - (l - f), end_);
+        return begin() + f;
     }
 
     void swap(vector& other) noexcept {
@@ -330,15 +351,15 @@ private:
         ++end_;
     }
 
-    template<typename U>
-    iterator insert_impl(difference_type pos, U&& value) {
+    template<typename... Args>
+    iterator insert_impl(difference_type pos, Args&&... args) {
         if (size() == capacity()) {
             split_buffer<value_type, allocator_type&> buff(size(), expand(size() + 1), alloc());
             swap_out_buffer(buff, begin_ + pos);
         } else {
             std::move_backward(begin_ + pos, end_, end_ + 1);
         }
-        unsafe_insert(begin_ + pos, std::forward<U>(value));
+        unsafe_insert(begin_ + pos, std::forward<Args>(args)...);
         return begin() + pos;
     }
 
