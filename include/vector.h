@@ -37,39 +37,41 @@ public: // aliases
 public: // constructors
     vector() noexcept = default;
 
-    vector(const Allocator& alloc) noexcept
+    vector(const allocator_type& alloc) noexcept
         : end_cap_allocator_(nullptr, alloc) {}
 
-    explicit vector(size_type count, const Allocator& a = Allocator())
+    explicit vector(size_type count,
+                    const allocator_type& a = allocator_type())
         : vector(a) {
         create(count);
     }
 
-    vector(size_type count, const T& value, const Allocator& a = Allocator())
+    vector(size_type count, const value_type& value,
+           const allocator_type& a = allocator_type())
         : vector(a) {
         create(count, value);
     }
 
-    template<typename InputIt>
-    vector(InputIt first,
-           typename std::enable_if_t<is_forward_iter<InputIt>::value, InputIt> last,
-           const Allocator& a = Allocator())
+    template<typename I>
+    vector(I first,
+           typename std::enable_if_t<is_forward_iter<I>::value, I> last,
+           const allocator_type& a = allocator_type())
         : vector(a) {
         create(first, last);
     }
 
-    template<typename InputIt>
-    vector(InputIt first,
-           typename std::enable_if_t<is_input_iter<InputIt>::value &&
-                                    !is_forward_iter<InputIt>::value, InputIt> last,
-           const Allocator& a = Allocator())
+    template<typename I>
+    vector(I first,
+           typename std::enable_if_t<is_input_iter<I>::value &&
+                                    !is_forward_iter<I>::value, I> last,
+           const allocator_type& a = allocator_type())
         : vector(a) {
         for (; first != last; ++first) {
             emplace_back(*first);
         }
     }
 
-    vector(std::initializer_list<value_type> list, const Allocator& a = Allocator())
+    vector(std::initializer_list<value_type> list, const allocator_type& a = allocator_type())
         : end_cap_allocator_(nullptr, a) {
         create(list.begin(), list.end());
     }
@@ -79,7 +81,7 @@ public: // constructors
         create(other.begin_, other.end_);
     }
 
-    vector(const vector& other, const Allocator& a)
+    vector(const vector& other, const allocator_type& a)
         : vector(a) {
         create(other.begin_, other.end_);
     }
@@ -92,7 +94,7 @@ public: // constructors
         other.begin_ = other.end_ = other.end_cap() = nullptr;
     }
 
-    vector(vector&& other, const Allocator& a)
+    vector(vector&& other, const allocator_type& a)
         : vector(a) {
         if (other.alloc() == a) {
             begin_ = other.begin_;
@@ -105,8 +107,8 @@ public: // constructors
     }
 
 public: // access members
-    const T* data() const noexcept { return begin_; }
-    T* data() noexcept             { return begin_; }
+    const value_type* data() const noexcept { return begin_; }
+    value_type* data() noexcept             { return begin_; }
 
     iterator begin() noexcept { return begin_; }
     iterator end() noexcept   { return end_; }
@@ -156,9 +158,9 @@ public: // access members
     }
 
 public: // assigns
-    template<typename InputIt>
-    void assign(InputIt first,
-                std::enable_if_t<is_forward_iter<InputIt>::value, InputIt> last) {
+    template<typename I>
+    void assign(I first,
+                std::enable_if_t<is_forward_iter<I>::value, I> last) {
         auto n = static_cast<size_type>(std::distance(first, last));
         if (n > capacity()) {
             clear_and_free();
@@ -229,20 +231,19 @@ public: // other modification members
     }
 
     void push_back(const_reference elem) {
-        check_reserve();
+        reserve_if_full();
         unsafe_insert(end_, elem);
     }
 
     void push_back(value_type&& elem) {
-        check_reserve();
+        reserve_if_full();
         unsafe_insert(end_, std::move(elem));
     }
 
     template<typename... Args>
     reference emplace_back(Args&&... args) {
-        check_reserve();
-        allocator_traits::construct(alloc(), end_, std::forward<Args>(args)...);
-        ++end_;
+        reserve_if_full();
+        unsafe_insert(end_, std::forward<Args>(args)...);
         return back();
     }
 
@@ -259,8 +260,9 @@ public: // other modification members
         return insert_impl(pos - begin(), std::move(value));
     }
 
-    template<class InputIt>
-    iterator insert(const_iterator pos, InputIt first, InputIt last) {
+    template<class I>
+    iterator insert(const_iterator pos, I first, I last) {
+
     }
 
     void swap(vector& other) noexcept {
@@ -299,15 +301,15 @@ private:
         std::swap(end_cap(), buff.end_cap());
     }
 
-    void check_reserve() {
+    void reserve_if_full() {
         if (end_ == end_cap()) {
             reserve(expand(size() + 1));
         }
     }
 
-    template<typename U>
-    void unsafe_insert(pointer p, U&& elem) {
-        allocator_traits::construct(alloc(), p, std::forward<U>(elem));
+    template<typename... Args>
+    void unsafe_insert(pointer p, Args&&... elem) {
+        allocator_traits::construct(alloc(), p, std::forward<Args>(elem)...);
         ++end_;
     }
 
@@ -330,8 +332,8 @@ private:
 
     void create(size_t n) {
         allocate_n(n);
-        for (; n != 0; --n, ++end_) {
-            allocator_traits::construct(alloc(), end_);
+        while(n-- != 0) {
+            unsafe_insert(end_);
         }
     }
 
@@ -342,8 +344,8 @@ private:
         }
     }
 
-    template<typename InputIt>
-    void create(InputIt first, InputIt last, std::optional<size_type> n = std::nullopt) {
+    template<typename I>
+    void create(I first, I last, std::optional<size_type> n = std::nullopt) {
         allocate_n(n ? *n : std::distance(first, last));
         end_ = uninit_copy(alloc(), first, last, end_);
     }
@@ -361,16 +363,16 @@ private:
     }
 
 private:
-    template<typename InputIt, typename OutIt>
-    static OutIt uninit_move(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
+    template<typename I, typename O>
+    static O uninit_move(allocator_type& alloc, I begin, I end, O res) {
         for (; begin != end; ++begin, ++res) {
             allocator_traits::construct(alloc, res, std::move_if_noexcept(*begin));
         }
         return res;
     }
 
-    template<typename InputIt, typename OutIt>
-    static OutIt uninit_copy(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
+    template<typename I, typename O>
+    static O uninit_copy(allocator_type& alloc, I begin, I end, O res) {
         for (; begin != end; ++begin, ++res) {
             allocator_traits::construct(alloc, res, *begin);
         }
