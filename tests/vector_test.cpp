@@ -40,6 +40,10 @@ TEST(VectorTest, Basic) {
 
     vec.clear();
     ASSERT_EQ(vec.size(), cast(0));
+    ASSERT_EQ(vec.capacity(), cast(2));
+
+    vec.shrink_to_fit();
+    ASSERT_EQ(vec.capacity(), cast(0));
 }
 
 TEST(VectorTest, Constructors) {
@@ -370,4 +374,15 @@ TEST(VectorTest, assign) {
         ASSERT_TRUE(check_trace(0, 1, 0, 3, 0, 0) &&
                     vec.capacity() == 6);
     }
+    { // input iterator
+        std::stringstream stream;
+        stream << "1" << " 2";
+        std::istream_iterator<int> first(stream);
+        std::istream_iterator<int> last;
+        dl::vector<int> vec{-1, -2};
+        vec.assign(first, last);
+        dl::vector<int> res{1, 2};
+        ASSERT_EQ(vec, res);
+    }
+
 }

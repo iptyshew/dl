@@ -159,8 +159,8 @@ public: // access members
 
 public: // assigns
     template<typename I>
-    void assign(I first,
-                std::enable_if_t<is_forward_iter<I>::value, I> last) {
+    std::enable_if_t<is_forward_iter<I>::value, void>
+    assign(I first, I last) {
         auto n = static_cast<size_type>(std::distance(first, last));
         if (n > capacity()) {
             clear_and_free();
@@ -172,6 +172,16 @@ public: // assigns
                 *it = *first;
             }
             end_ = uninit_copy(alloc(), first, last, end_);
+        }
+    }
+
+    template<typename I>
+    typename std::enable_if_t<is_input_iter<I>::value &&
+                              !is_forward_iter<I>::value, void>
+    assign(I first, I last) {
+        clear();
+        for (; first != last; ++first) {
+            emplace_back(*first);
         }
     }
 
@@ -269,6 +279,13 @@ public: // other modification members
         std::swap(begin_, other.begin_);
         std::swap(end_, other.end_);
         std::swap(end_cap_allocator_, other.end_cap_allocator_);
+    }
+
+    void shrink_to_fit() {
+        if (capacity() != size()) {
+            split_buffer<value_type, allocator_type&> buff(size(), size(), alloc());
+            swap_out_buffer(buff);
+        }
     }
 
     ~vector() {
