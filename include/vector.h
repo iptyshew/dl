@@ -113,7 +113,7 @@ public: // constructors
         }
     }
 
-public:
+public: // access members
     const T* data() const noexcept { return begin_; }
     T* data() noexcept             { return begin_; }
 
@@ -164,12 +164,26 @@ public:
         return alloc();
     }
 
-public:
+public: // assigns
     template<typename InputIt>
-    void assign(InputIt b, InputIt e) { // \todo
-        reserve(std::distance(b, e));
-        while (b != e) {
-            push_back(*b++);
+    void assign(InputIt first,
+                std::enable_if_t<is_forward_iter<InputIt>::value, InputIt> last) {
+        auto n = std::distance(first, last);
+        if (n > capacity()) {
+            clear();
+            allocator_traits::deallocate(alloc(), begin_, capacity());
+            allocate_n(n);
+            construct_at_end(first, last);
+        } else if (n < size()) {
+            for (auto it = begin_; first != last; ++first, ++it) {
+                *it = *first;
+            }
+            end_ = destroy_range(alloc(), begin_ + n, end_);
+        } else if (n > size()) {
+            for (auto it = begin_; it != end_; ++it, ++first) {
+                *it = *first;
+            }
+            construct_at_end(first, last);
         }
     }
 
@@ -177,6 +191,11 @@ public:
         assign(ilist.begin(), ilist.end());
     }
 
+    void assign(size_type count, const T& value) {
+
+    }
+
+public: // other modification members
     void clear() noexcept {
         end_ = destroy_range(alloc(), begin_, end_);
     }
@@ -321,14 +340,14 @@ private:
     }
 
     void construct_at_end(size_t n) {
-        while (n-- != 0) {
-            allocator_traits::construct(alloc(), end_++);
+        for (; n != 0; --n, ++end_) {
+            allocator_traits::construct(alloc(), end_);
         }
     }
 
     void construct_at_end(size_t n, const_reference value) {
-        while (n-- != 0) {
-            allocator_traits::construct(alloc(), end_++, value);
+        for (; n != 0; --n, ++end_) {
+            allocator_traits::construct(alloc(), end_, value);
         }
     }
 
@@ -340,8 +359,8 @@ private:
 private:
     template<typename InputIt, typename OutIt>
     static OutIt uninit_move(allocator_type& alloc, InputIt begin, InputIt end, OutIt res) {
-        while (begin != end) {
-            allocator_traits::construct(alloc, res++, std::move_if_noexcept(*(begin++)));
+        for (; begin != end; ++begin) {
+            allocator_traits::construct(alloc, res++, std::move_if_noexcept(*begin));
         }
         return res;
     }
@@ -355,23 +374,22 @@ private:
     }
 
     static pointer destroy_range(allocator_type& alloc, pointer begin, pointer end) {
-        auto it = begin;
-        while (it != end) {
-            allocator_traits::destroy(alloc, it++);
+        for (auto it = begin; it != end; ++it) {
+            allocator_traits::destroy(alloc, it);
         }
         return begin;
     }
 
     static pointer construct_range(allocator_type& alloc, pointer begin, pointer end) {
-        while (begin != end) {
-            allocator_traits::construct(alloc, begin++);
+        for (; begin != end; ++begin) {
+            allocator_traits::construct(alloc, begin);
         }
         return begin;
     }
 
     static pointer construct_range(allocator_type& alloc, pointer begin, pointer end, const value_type& val) {
-        while (begin != end) {
-            allocator_traits::construct(alloc, begin++, val);
+        for (; begin != end; ++begin) {
+            allocator_traits::construct(alloc, begin, val);
         }
         return begin;
     }

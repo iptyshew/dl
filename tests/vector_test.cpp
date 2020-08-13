@@ -9,14 +9,18 @@ size_type cast(int n) {
     return static_cast<size_type>(n);
 }
 
-bool check_test_type(size_t dc, size_t clc, size_t mrc, size_t olc, size_t orc, size_t d) {
+bool check_trace(size_t bc, size_t clc, size_t mrc, size_t olc, size_t orc, size_t d) {
     return
-        test_type::default_construct == dc &&
-        test_type::copy_lval_construct == clc &&
-        test_type::move_rval_construct == mrc &&
-        test_type::operator_lval_construct == olc &&
-        test_type::operator_rval_construct == orc &&
-        test_type::destruct == d;
+        trace_int::basic_construct == bc &&
+        trace_int::copy_lval_construct == clc &&
+        trace_int::move_rval_construct == mrc &&
+        trace_int::operator_lval_construct == olc &&
+        trace_int::operator_rval_construct == orc &&
+        trace_int::destruct == d;
+}
+
+auto makeVector(std::initializer_list<int> l) {
+    return dl::vector<trace_int>(l.begin(), l.end());
 }
 
 TEST(VectorTest, Basic) {
@@ -80,7 +84,7 @@ TEST(VectorTest, Constructors) {
         dl::vector<int> res{1, 2, 3};
         ASSERT_EQ(vec, res);
     }
-    {
+    { // input iterator
         std::stringstream stream;
         stream << "1" << " 2";
         std::istream_iterator<int> first(stream);
@@ -93,58 +97,49 @@ TEST(VectorTest, Constructors) {
 
 TEST(VectorTest, ChangeLastElement) {
     { // rvalue
-        test_type::init();
-        dl::vector<test_type> vec;
-        vec.push_back(test_type());
-        vec.push_back(test_type());
-        vec.push_back(test_type());
-        ASSERT_EQ(vec.size(), cast(3));
-        ASSERT_EQ(vec.capacity(), cast(4));
+        dl::vector<trace_int> vec;
+        trace_int::init();
+        vec.push_back({1});
+        vec.push_back({2});
+        vec.push_back({3});
+        ASSERT_TRUE(check_trace(3, 0, 6, 0, 0, 6) &&
+                    vec.size() == 3 &&
+                    vec.capacity() == 4);
+        ASSERT_EQ(vec, makeVector({1, 2, 3}));
     }
-    ASSERT_TRUE(check_test_type(3, 0, 6, 0, 0, 9));
 
     { // lvalue
-        test_type::init();
-        dl::vector<test_type> vec;
-        test_type temp;
-        vec.push_back(temp);
-        vec.push_back(temp);
-        vec.push_back(temp);
-        ASSERT_EQ(vec.size(), cast(3));
-        ASSERT_EQ(vec.capacity(), cast(4));
+        dl::vector<trace_int> vec;
+        trace_int v1(1), v2(2), v3(3);
+        trace_int::init();
+        vec.push_back(v1);
+        vec.push_back(v2);
+        vec.push_back(v3);
+        ASSERT_TRUE(check_trace(0, 3, 3, 0, 0, 3) &&
+                    vec.size() == 3 &&
+                    vec.capacity() == 4);
+        ASSERT_EQ(vec, makeVector({1, 2, 3}));
     }
-    ASSERT_TRUE(check_test_type(1, 3, 3, 0, 0, 7));
 
-    { // don't use move has't noexcept
-        test_type_exception::init();
-        dl::vector<test_type_exception> vec;
-        test_type_exception temp;
-        vec.push_back(temp);
-        vec.push_back(temp);
-        vec.push_back(temp);
-        ASSERT_EQ(cast(6), test_type_exception::copy_lval_construct);
-        ASSERT_EQ(cast(0), test_type_exception::move_rval_construct);
-    }
-    { // check content
-        dl::vector<int> vec;
-        vec.push_back(1);
-        vec.push_back(2);
-        vec.push_back(3);
-        dl::vector<int> res{1, 2, 3};
+    { // emplace_back
+        auto vec = makeVector({1, 2});
+        trace_int::init();
+        vec.emplace_back(3);
+        ASSERT_TRUE(check_trace(1, 0, 2, 0, 0, 2) &&
+                    vec.size() == 3 &&
+                    vec.capacity() == 4);
+        auto res = makeVector({1, 2, 3});
         ASSERT_EQ(vec, res);
     }
-    { // emplacs_back
-        dl::vector<std::pair<int, int>> vec;
-        vec.emplace_back(1, 2);
-        ASSERT_EQ(vec.front().first, 1);
-        ASSERT_EQ(vec.front().second, 2);
-    }
     { // pop_back
-        dl::vector<int> vec{1, 2, 3};
+        auto vec = makeVector({1, 2, 3});
+        trace_int::init();
         vec.pop_back();
-        ASSERT_EQ(vec.size(), cast(2));
-        ASSERT_EQ(vec.capacity(), cast(3));
-        ASSERT_EQ(vec.back(), 2);
+        ASSERT_TRUE(check_trace(0, 0, 0, 0, 0, 1) &&
+                    vec.size() == 2 &&
+                    vec.capacity() == 3);
+        auto res = makeVector({1, 2});
+        ASSERT_EQ(vec, res);
     }
 }
 
@@ -183,68 +178,70 @@ TEST(VectorTest, Iterator) {
 }
 
 TEST(VectorTest, reserve) {
-    test_type::init();
-    dl::vector<test_type> vec;
+    auto vec = makeVector({1, 2, 3, 4});
+    auto res = vec;
 
-    vec.reserve(100);
-    ASSERT_EQ(vec.capacity(), cast(100));
+    trace_int::init();
+    vec.reserve(10);
+    ASSERT_TRUE(check_trace(0, 0, 4, 0, 0, 4) &&
+                vec.size() == 4 &&
+                vec.capacity() == 10);
+    ASSERT_EQ(vec, res);
 
-    // capacity no down
-    vec.reserve(50);
-    ASSERT_EQ(vec.capacity(), cast(100));
-
-    ASSERT_EQ(test_type::default_construct, cast(0));
-    ASSERT_EQ(test_type::destruct, cast(0));
+    trace_int::init();
+    vec.reserve(5);
+    ASSERT_TRUE(check_trace(0, 0, 0, 0, 0, 0) &&
+                vec.size() == 4 &&
+                vec.capacity() == 10);
+    ASSERT_EQ(vec, res);
 }
 
 TEST(VectorTest, resize) {
     { // n > capacity, n > size
-        test_type::init();
-        dl::vector<test_type> vec;
-        vec.reserve(10);
-        vec.resize(5);
-        vec.resize(15);
-        ASSERT_EQ(vec.capacity(), cast(15));
-        ASSERT_EQ(vec.size(), cast(15));
+        trace_int::init();
+        auto vec = makeVector({1, 2});
+        vec.reserve(4);
+        trace_int::init();
+        vec.resize(6);
+        ASSERT_TRUE(check_trace(4, 0, 2, 0, 0, 2) &&
+                    vec.size() == 6 &&
+                    vec.capacity() == 6);
+        auto res = makeVector({1, 2, 0, 0, 0, 0});
+        ASSERT_EQ(vec, res);
     }
-    ASSERT_TRUE(check_test_type(15, 0, 5, 0, 0, 20));
 
     { // n < capacity , n < size
-        test_type::init();
-        dl::vector<test_type> vec;
-        vec.reserve(10);
-        vec.resize(7);
-        vec.resize(3);
-        ASSERT_EQ(vec.capacity(), cast(10));
-        ASSERT_EQ(vec.size(), cast(3));
+        auto vec = makeVector({1, 2, 3, 4});
+        vec.reserve(6);
+        trace_int::init();
+        vec.resize(2);
+        ASSERT_TRUE(check_trace(0, 0, 0, 0, 0, 2) &&
+                    vec.size() == 2 &&
+                    vec.capacity() == 6);
+        auto res = makeVector({1, 2});
+        ASSERT_EQ(vec, res);
     }
-    ASSERT_TRUE(check_test_type(7, 0, 0, 0, 0, 7));
 
     { // n < capacity, n > size
-        test_type::init();
-        dl::vector<test_type> vec;
-        vec.reserve(10);
-        vec.resize(1);
-        vec.resize(5);
-        ASSERT_EQ(vec.capacity(), cast(10));
-        ASSERT_EQ(vec.size(), cast(5));
+        auto vec = makeVector({1, 2});
+        vec.reserve(6);
+        trace_int::init();
+        vec.resize(4);
+        ASSERT_TRUE(check_trace(2, 0, 0, 0, 0, 0) &&
+                    vec.size() == 4 &&
+                    vec.capacity() == 6);
+        auto res = makeVector({1, 2, 0, 0});
+        ASSERT_EQ(vec, res);
     }
-    ASSERT_TRUE(check_test_type(5, 0, 0, 0, 0, 5));
 
     { // n = capacity = size
-        test_type::init();
-        dl::vector<test_type> vec;
-        vec.reserve(2);
-        vec.resize(2);
-        vec.resize(2);
-    }
-    ASSERT_TRUE(check_test_type(2, 0, 0, 0, 0, 2));
-
-    { // resize val
-        test_type::init();
-        dl::vector<int> vec;
-        vec.resize(3, 3);
-        dl::vector<int> res{3, 3, 3};
+        auto vec = makeVector({1, 2, 3, 4});
+        auto res = vec;
+        trace_int::init();
+        vec.resize(4);
+        ASSERT_TRUE(check_trace(0, 0, 0, 0, 0, 0) &&
+                    vec.size() == 4 &&
+                    vec.capacity() == 4);
         ASSERT_EQ(vec, res);
     }
 }
@@ -269,53 +266,58 @@ TEST(VectorTest, compare) {
 
 TEST(VectorTest, insert) {
     { // some insert;
-        dl::vector<int> vec;
-        vec.insert(vec.begin(), 1);
-        vec.insert(vec.begin(), 2);
-        vec.insert(vec.begin(), 3);
-        vec.insert(vec.begin(), 4);
-        dl::vector<int> res{4, 3, 2, 1};
-        ASSERT_EQ(vec, res);
-        ASSERT_EQ(vec.capacity(), cast(4));
-        ASSERT_EQ(vec.size(), cast(4));
-    }
-    { // push_back
-        dl::vector<int> vec;
-        auto it = vec.insert(vec.end(), 1);
-        dl::vector<int> res;
-        res.push_back(1);
-        ASSERT_EQ(vec, res);
-        ASSERT_EQ(it, vec.begin());
-    }
-    { // expand capacity
-        dl::vector<int> vec{1, 2, 4};
-        auto it = vec.insert(vec.end() - 1, 3);
-        dl::vector<int> res{1, 2, 3, 4};
-        ASSERT_EQ(vec, res);
-        ASSERT_EQ(it, vec.end() - 2);
-        ASSERT_EQ(vec.capacity(), cast(6));
-        ASSERT_EQ(vec.size(), cast(4));
-    }
-    { // keep capacity
-        dl::vector<int> vec{1, 2, 4};
-        vec.reserve(5);
-        auto it1 = vec.insert(vec.end() - 1, 3);
-        ASSERT_EQ(it1, vec.end() - 2);
-
-        auto it2 = vec.insert(vec.begin() + 1, 10);
-        ASSERT_EQ(it2, vec.begin() + 1);
-
-        ASSERT_EQ(vec.capacity(), cast(5));
-        ASSERT_EQ(vec.size(), cast(5));
-
-        dl::vector<int> res{1, 10, 2, 3, 4};
+        dl::vector<trace_int> vec;
+        trace_int v1(1), v2(2), v3(3), v4(4);
+        trace_int::init();
+        vec.insert(vec.begin(), v1);
+        vec.insert(vec.begin(), v2);
+        vec.insert(vec.begin(), v3);
+        vec.insert(vec.begin(), v4);
+        ASSERT_TRUE(check_trace(0, 4, 3, 0, 3, 3) &&
+                    vec.size() == 4 &&
+                    vec.capacity() == 4);
+        auto res = makeVector({4, 3, 2, 1});
         ASSERT_EQ(vec, res);
     }
-    {
-        dl::vector<test_type> vec{test_type(), test_type(), test_type()};
-        vec.reserve(4);
-        test_type::init();
-        vec.insert(vec.begin() + 1, test_type());
-        ASSERT_TRUE(check_test_type(1, 0, 1, 0, 2, 1));
+    { // push back
+        auto vec = makeVector({1, 2});
+        trace_int val(3);
+        trace_int::init();
+        vec.insert(vec.end(), val);
+        ASSERT_TRUE(check_trace(0, 1, 2, 0, 0, 2) &&
+                    vec.size() == 3 &&
+                    vec.capacity() == 4);
+        auto res = makeVector({1, 2, 3});
+        ASSERT_EQ(vec, res);
     }
 }
+
+// TEST(VectorTest, assign) {
+//     { // assign count > capacity
+//         dl::vector<int> vec;
+//         vec.reserve(2);
+//         dl::vector<int> res{1, 2, 3};
+//         vec.assign(res.begin(), res.end());
+//         ASSERT_EQ(vec.size(), cast(3));
+//         ASSERT_EQ(vec.capacity(), cast(3));
+//         ASSERT_EQ(vec, res);
+//     }
+//     { // assign count < size
+//         dl::vector<int> vec{1, 2, 3};
+//         vec.reserve(4);
+//         dl::vector<int> res{1, 2};
+//         vec.assign(res.begin(), res.end());
+//         ASSERT_EQ(vec.size(), res.size());
+//         ASSERT_EQ(vec.capacity(), cast(4));
+//         ASSERT_EQ(vec, res);
+//     }
+//     { // assign count > size, but < capacity
+//         dl::vector<int> vec{1, 2, 3};
+//         vec.reserve(5);
+//         dl::vector<int> res{1, 2, 3, 4};
+//         vec.assign(res.begin(), res.end());
+//         ASSERT_EQ(vec.size(), res.size());
+//         ASSERT_EQ(vec.capacity(), cast(5));
+//         ASSERT_EQ(vec, res);
+//     }
+// }

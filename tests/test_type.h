@@ -1,44 +1,54 @@
 #pragma once
 #include <cstddef>
 
-class test_type
+template<typename T>
+class trace_type
 {
 public:
-    test_type() {
-        ++default_construct;
+    trace_type() : value(T()) {
+        ++basic_construct;
     }
-    test_type(const test_type&) {
+
+    trace_type(T v) : value(v) {
+        ++basic_construct;
+    }
+
+    trace_type(const trace_type& o) : value(o.value) {
         ++copy_lval_construct;
     }
 
-    test_type(test_type&&) noexcept {
+    trace_type(trace_type&& o) noexcept
+        : value(std::move(o.value)) {
         ++move_rval_construct;
     }
 
-    test_type& operator=(const test_type&) {
+    trace_type& operator=(const trace_type& o) {
+        value = o.value;
         ++operator_lval_construct;
         return *this;
     }
 
-    test_type& operator=(test_type&&) noexcept {
+    trace_type& operator=(trace_type&& o) noexcept {
+        value = std::move(o.value);
         ++operator_rval_construct;
         return *this;
     }
 
-    ~test_type() {
+    ~trace_type() {
         ++destruct;
     }
 
     static void init() {
-        default_construct = 0;
+        basic_construct = 0;
         copy_lval_construct = 0;
         move_rval_construct = 0;
         operator_lval_construct = 0;
         operator_rval_construct = 0;
         destruct = 0;
     }
+    int value;
 
-    static size_t default_construct;
+    static size_t basic_construct;
     static size_t copy_lval_construct;
     static size_t move_rval_construct;
     static size_t operator_lval_construct;
@@ -46,48 +56,28 @@ public:
     static size_t destruct;
 };
 
-size_t test_type::default_construct = 0;
-size_t test_type::copy_lval_construct = 0;
-size_t test_type::move_rval_construct = 0;
-size_t test_type::operator_lval_construct = 0;
-size_t test_type::operator_rval_construct = 0;
-size_t test_type::destruct = 0;
+template<typename T>
+bool operator==(const trace_type<T>& lhs, const trace_type<T>& rhs) {
+    return lhs.value == rhs.value;
+}
 
-class test_type_exception : public test_type
-{
-public:
-    static void init() {
-        default_construct = 0;
-        copy_lval_construct = 0;
-        move_rval_construct = 0;
-        operator_lval_construct = 0;
-        operator_rval_construct = 0;
-        destruct = 0;
-    }
+template<typename T>
+size_t trace_type<T>::basic_construct = 0;
 
-    test_type_exception() : test_type() {
-        ++default_construct;
-    }
+template<typename T>
+size_t trace_type<T>::copy_lval_construct = 0;
 
-    test_type_exception(const test_type_exception&) {
-        ++copy_lval_construct;
-    }
+template<typename T>
+size_t trace_type<T>::move_rval_construct = 0;
 
-    test_type_exception(test_type_exception&&)  {
-        ++move_rval_construct;
-    }
+template<typename T>
+size_t trace_type<T>::operator_lval_construct = 0;
 
-    test_type_exception& operator=(const test_type_exception&) {
-        ++operator_lval_construct;
-        return *this;
-    }
+template<typename T>
+size_t trace_type<T>::operator_rval_construct = 0;
 
-    test_type_exception& operator=(test_type_exception&&) {
-        ++operator_rval_construct;
-        return *this;
-    }
+template<typename T>
+size_t trace_type<T>::destruct = 0;
 
-    ~test_type_exception() {
-        ++destruct;
-    }
-};
+using trace_int = trace_type<int>;
+template class trace_type<int>;

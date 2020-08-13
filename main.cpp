@@ -9,6 +9,6 @@
 #include "include/vector.h"
 
 int main() {
-
-    std::vector<int>()
+    std::vector<int> v;
+    std::cout << v.capacity();
 }
