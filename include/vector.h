@@ -267,14 +267,41 @@ public: // other modification members
 
     template<class I>
     iterator insert(const_iterator pos, I first, I last) {
+        auto n = static_cast<size_type>(std::distance(first, last));
+        if (n + size() > capacity()) {
 
+        } else {
+
+        }
+    }
+
+    iterator insert(const_iterator pos, size_type count, const value_type& value) {
+
+    }
+
+    iterator insert(const_iterator pos, std::initializer_list<value_type> list) {
+        insert(pos, list.begin(), list.end());
     }
 
     template<typename... Args>
-    iterator emplace(const_iterator pos, Args&&... args) {
-        insert_impl(pos - begin(), std::forward<Args>(args)...);
+    iterator emplace(const_iterator cpos, Args&&... args) {
+        auto idx = cpos - begin();
+        auto pos = begin_ + idx;
+        if (end_ == end_cap()) {
+            split_buffer<value_type, allocator_type&> buff(size() + 1, expand(size() + 1), alloc());
+            swap_out_buffer(buff, pos);
+            pos = begin_ + idx;
+        } else if (pos != end_) {
+            auto last = end_ - 1;
+            unsafe_insert(end_, std::move(*last));
+            std::move_backward(pos, last, end_ - 1);
+            allocator_traits::destroy(alloc(), pos);
+        } else {
+            ++end_;
+        }
+        allocator_traits::construct(alloc(), pos, std::forward<Args>(args)...);
+        return begin() + idx;
     }
-
 
     void pop_back() {
         allocator_traits::destroy(alloc(), end_ - 1);
@@ -351,16 +378,22 @@ private:
         ++end_;
     }
 
-    template<typename... Args>
-    iterator insert_impl(difference_type pos, Args&&... args) {
-        if (size() == capacity()) {
+    template<typename U>
+    iterator insert_impl(difference_type idx, U&& value) {
+        auto pos = begin_ + idx;
+        if (end_ == end_cap()) {
             split_buffer<value_type, allocator_type&> buff(size(), expand(size() + 1), alloc());
-            swap_out_buffer(buff, begin_ + pos);
+            swap_out_buffer(buff, pos);
+            unsafe_insert(begin_ + idx, std::forward<U>(value));
+        } else if (pos != end_) {
+            auto last = end_ - 1;
+            unsafe_insert(end_, std::move(*last));
+            std::move_backward(pos, last, end_ - 1);
+            *pos = std::forward<U>(value);
         } else {
-            std::move_backward(begin_ + pos, end_, end_ + 1);
+            unsafe_insert(end_, std::forward<U>(value));
         }
-        unsafe_insert(begin_ + pos, std::forward<Args>(args)...);
-        return begin() + pos;
+        return begin() + idx;
     }
 
     void allocate_n(size_type n) {
