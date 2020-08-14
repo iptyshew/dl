@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <algorithm>
+#include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -197,7 +198,7 @@ public: // assigns
             end_ = clear(begin_ + n, end_);
         } else if (n > size()) {
             std::fill(begin_, end_, value);
-            end_ = construct_range(alloc(), end_, begin_ + n, value);
+            end_ = construct(end_, begin_ + n, value);
         }
     }
 
@@ -214,29 +215,15 @@ public: // other modification members
     }
 
     void resize(size_type n) {
-        auto sz = size();
-        if (n > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(n, expand(n), alloc());
-            construct_range(buff.alloc(), buff.begin + sz, buff.end);
-            swap_out_buffer(buff);
-        } else if (n < sz) {
-            end_ = clear(begin_ + n, end_);
-        } else if (n > sz) {
-            end_ = construct_range(alloc(), begin_ + sz, begin_ + n);
-        }
+        resize_impl(n, [this](pointer begin, pointer end) {
+                           return construct(begin, end);
+                       });
     }
 
-    void resize(size_type n, const value_type& value) { // \todo :(
-        auto sz = size();
-        if (n > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(n, expand(n), alloc());
-            construct_range(buff.alloc(), buff.begin + sz, buff.end, value);
-            swap_out_buffer(buff);
-        } else if (n < sz) {
-            end_ = clear(begin_ + n, end_);
-        } else if (n > sz) {
-            end_ = construct_range(alloc(), begin_ + sz, begin_ + n, value);
-        }
+    void resize(size_type n, const value_type& value) {
+        resize_impl(n, [&](pointer begin, pointer end) {
+                           return construct(begin, end, value);
+                       });
     }
 
     void push_back(const_reference elem) {
@@ -379,6 +366,20 @@ private:
         ++end_;
     }
 
+    template<typename Constructor>
+    void resize_impl(size_type n, const Constructor& constructor) {
+        auto sz = size();
+        if (n > capacity()) {
+            split_buffer<value_type, allocator_type&> buff(n, expand(n), alloc());
+            constructor(buff.begin + sz, buff.end);
+            swap_out_buffer(buff);
+        } else if (n < sz) {
+            end_ = clear(begin_ + n, end_);
+        } else if (n > sz) {
+            end_ = constructor(begin_ + sz, begin_ + n);
+        }
+    }
+
     template<typename U>
     iterator insert_impl(difference_type idx, U&& value) {
         auto pos = begin_ + idx;
@@ -434,6 +435,20 @@ private:
         return begin;
     }
 
+    pointer construct(pointer begin, pointer end) {
+        for (; begin != end; ++begin) {
+            allocator_traits::construct(alloc(), begin);
+        }
+        return begin;
+    }
+
+    pointer construct(pointer begin, pointer end, const value_type& val) {
+        for (; begin != end; ++begin) {
+            allocator_traits::construct(alloc(), begin, val);
+        }
+        return begin;
+    }
+
 private:
     template<typename I, typename O>
     static O uninit_move(allocator_type& alloc, I begin, I end, O res) {
@@ -449,20 +464,6 @@ private:
             allocator_traits::construct(alloc, res, *begin);
         }
         return res;
-    }
-
-    static pointer construct_range(allocator_type& alloc, pointer begin, pointer end) {
-        for (; begin != end; ++begin) {
-            allocator_traits::construct(alloc, begin);
-        }
-        return begin;
-    }
-
-    static pointer construct_range(allocator_type& alloc, pointer begin, pointer end, const value_type& val) {
-        for (; begin != end; ++begin) {
-            allocator_traits::construct(alloc, begin, val);
-        }
-        return begin;
     }
 
 private:
