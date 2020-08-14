@@ -176,8 +176,7 @@ public: // assigns
     }
 
     template<typename I>
-    typename std::enable_if_t<is_input_iter<I>::value &&
-                              !is_forward_iter<I>::value, void>
+    std::enable_if_t<is_input_iter<I>::value && !is_forward_iter<I>::value, void>
     assign(I first, I last) {
         clear();
         for (; first != last; ++first) {
@@ -266,17 +265,19 @@ public: // other modification members
     }
 
     template<class I>
-    iterator insert(const_iterator pos, I first, I last) {
-        auto n = static_cast<size_type>(std::distance(first, last));
-        if (n + size() > capacity()) {
+    std::enable_if<is_forward_iter<I>::value, iterator>
+    insert(const_iterator pos, I first, I last) {
+        (void)pos; (void)first; (void)last;
+    }
 
-        } else {
-
-        }
+    template<class I>
+    std::enable_if<is_input_iter<I>::value && !is_forward_iter<I>::value, iterator>
+    insert(const_iterator pos, I first, I last) {
+        (void)pos; (void)first; (void)last;
     }
 
     iterator insert(const_iterator pos, size_type count, const value_type& value) {
-
+        (void)pos; (void)count; (void)value;
     }
 
     iterator insert(const_iterator pos, std::initializer_list<value_type> list) {

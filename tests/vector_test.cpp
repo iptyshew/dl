@@ -9,15 +9,21 @@ size_type cast(int n) {
     return static_cast<size_type>(n);
 }
 
-bool check_trace(size_t bc, size_t clc, size_t mrc, size_t olc, size_t orc, size_t d) {
-    return
-        trace_int::basic_construct == bc &&
-        trace_int::copy_lval_construct == clc &&
-        trace_int::move_rval_construct == mrc &&
-        trace_int::operator_lval_construct == olc &&
-        trace_int::operator_rval_construct == orc &&
-        trace_int::destruct == d;
-}
+#define CHECK_TRACE(bc, clc, mrc, olc, orc, d)                      \
+    do {                                                            \
+        EXPECT_EQ(trace_int::basic_construct, cast(bc));            \
+        EXPECT_EQ(trace_int::copy_lval_construct, cast(clc));       \
+        EXPECT_EQ(trace_int::move_rval_construct, cast(mrc));       \
+        EXPECT_EQ(trace_int::operator_lval_construct, cast(olc));   \
+        EXPECT_EQ(trace_int::operator_rval_construct, cast(orc));   \
+        EXPECT_EQ(trace_int::destruct, cast(d));                    \
+    } while (0)
+
+#define CHECK_VECTOR(vec, res, cap)             \
+    do {                                        \
+        EXPECT_EQ(vec, res);                    \
+        EXPECT_EQ(vec.capacity(), cast(cap));   \
+    } while (0)
 
 auto makeVector(std::initializer_list<int> l = {}) {
     return dl::vector<trace_int>(l.begin(), l.end());
@@ -39,8 +45,7 @@ TEST(VectorTest, Basic) {
     ASSERT_EQ(vec.data()[0], 1);
 
     vec.clear();
-    ASSERT_EQ(vec.size(), cast(0));
-    ASSERT_EQ(vec.capacity(), cast(2));
+    CHECK_VECTOR(vec, dl::vector<int>{}, 2);
 
     vec.shrink_to_fit();
     ASSERT_EQ(vec.capacity(), cast(0));
@@ -49,44 +54,34 @@ TEST(VectorTest, Basic) {
 TEST(VectorTest, Constructors) {
     {
         dl::vector<int> vec(3);
-        ASSERT_EQ(vec.size(), cast(3));
-        ASSERT_EQ(vec.capacity(), cast(3));
         dl::vector<int> res{0, 0, 0};
-        ASSERT_EQ(vec, res);
+        CHECK_VECTOR(vec, res, 3);
     }
     {
         dl::vector<int> vec(3, 3);
-        ASSERT_EQ(vec.size(), cast(3));
-        ASSERT_EQ(vec.capacity(), cast(3));
         dl::vector<int> res{3, 3, 3};
-        ASSERT_EQ(vec, res);
+        CHECK_VECTOR(vec, res, 3);
     }
     {
         auto list = {1, 2, 3};
         dl::vector<int> vec(list.begin(), list.end());
-        ASSERT_EQ(vec.size(), cast(3));
-        ASSERT_EQ(vec.capacity(), cast(3));
         dl::vector<int> res{1, 2, 3};
-        ASSERT_EQ(vec, res);
+        CHECK_VECTOR(vec, res, 3);
     }
     {
         dl::vector<int> temp{1, 2, 3};
         dl::vector<int> vec(temp);
-        ASSERT_EQ(vec.size(), cast(3));
-        ASSERT_EQ(vec.capacity(), cast(3));
         dl::vector<int> res{1, 2, 3};
-        ASSERT_EQ(vec, res);
+        CHECK_VECTOR(vec, res, 3);
     }
     {
         dl::vector<int> temp{1, 2, 3};
         dl::vector<int> vec(std::move(temp));
-        ASSERT_EQ(vec.size(), cast(3));
-        ASSERT_EQ(vec.capacity(), cast(3));
 
         ASSERT_EQ(temp.size(), cast(0));
         ASSERT_EQ(temp.capacity(), cast(0));
         dl::vector<int> res{1, 2, 3};
-        ASSERT_EQ(vec, res);
+        CHECK_VECTOR(vec, res, 3);
     }
     { // input iterator
         std::stringstream stream;
@@ -95,55 +90,45 @@ TEST(VectorTest, Constructors) {
         std::istream_iterator<int> last;
         dl::vector<int> vec(first, last);
         dl::vector<int> res{1, 2};
-        ASSERT_EQ(vec, res);
+        CHECK_VECTOR(vec, res, 2);
     }
 }
 
 TEST(VectorTest, ChangeLastElement) {
+    auto result = makeVector({1, 2, 3});
     { // rvalue
         auto vec = makeVector();
+        trace_int vals[] = {trace_int(1), trace_int(2), trace_int(3)};
         trace_int::init();
-        vec.push_back({1});
-        vec.push_back({2});
-        vec.push_back({3});
-        ASSERT_TRUE(check_trace(3, 0, 6, 0, 0, 6) &&
-                    vec.size() == 3 &&
-                    vec.capacity() == 4);
-        ASSERT_EQ(vec, makeVector({1, 2, 3}));
+        for (auto& v : vals) {
+            vec.push_back(std::move(v));
+        }
+        CHECK_TRACE(0, 0, 6, 0, 0, 3);
+        CHECK_VECTOR(vec, result, 4);
     }
-
     { // lvalue
         auto vec = makeVector();
-        trace_int v1(1), v2(2), v3(3);
+        trace_int vals[] = {trace_int(1), trace_int(2), trace_int(3)};
         trace_int::init();
-        vec.push_back(v1);
-        vec.push_back(v2);
-        vec.push_back(v3);
-        ASSERT_TRUE(check_trace(0, 3, 3, 0, 0, 3) &&
-                    vec.size() == 3 &&
-                    vec.capacity() == 4);
-        ASSERT_EQ(vec, makeVector({1, 2, 3}));
+        for (const auto& v : vals) {
+            vec.push_back(v);
+        }
+        CHECK_TRACE(0, 3, 3, 0, 0, 3);
+        CHECK_VECTOR(vec, result, 4);
     }
-
     { // emplace_back
         auto vec = makeVector({1, 2});
         trace_int::init();
         vec.emplace_back(3);
-        ASSERT_TRUE(check_trace(1, 0, 2, 0, 0, 2) &&
-                    vec.size() == 3 &&
-                    vec.capacity() == 4);
-        auto res = makeVector({1, 2, 3});
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(1, 0, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, result, 4);
     }
     { // pop_back
-        auto vec = makeVector({1, 2, 3});
+        auto vec = makeVector({1, 2, 3, 4});
         trace_int::init();
         vec.pop_back();
-        ASSERT_TRUE(check_trace(0, 0, 0, 0, 0, 1) &&
-                    vec.size() == 2 &&
-                    vec.capacity() == 3);
-        auto res = makeVector({1, 2});
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, 0, 0, 0, 0, 1);
+        CHECK_VECTOR(vec, result, 4);
     }
 }
 
@@ -186,18 +171,15 @@ TEST(VectorTest, reserve) {
     auto res = vec;
 
     trace_int::init();
-    vec.reserve(10);
-    ASSERT_TRUE(check_trace(0, 0, 4, 0, 0, 4) &&
-                vec.size() == 4 &&
-                vec.capacity() == 10);
-    ASSERT_EQ(vec, res);
+    size_t n = 10;
+    vec.reserve(n);
+    CHECK_TRACE(0, 0, res.size(), 0, 0, res.size());
+    CHECK_VECTOR(vec, res, n);
 
     trace_int::init();
     vec.reserve(5);
-    ASSERT_TRUE(check_trace(0, 0, 0, 0, 0, 0) &&
-                vec.size() == 4 &&
-                vec.capacity() == 10);
-    ASSERT_EQ(vec, res);
+    CHECK_TRACE(0, 0, 0, 0, 0, 0);
+    CHECK_VECTOR(vec, res, n);
 }
 
 TEST(VectorTest, resize) {
@@ -206,46 +188,32 @@ TEST(VectorTest, resize) {
         vec.reserve(4);
         trace_int::init();
         vec.resize(6);
-
-        ASSERT_TRUE(check_trace(4, 0, 2, 0, 0, 2));
-        ASSERT_EQ(vec.capacity(), cast(8));
-        auto res = makeVector({1, 2, 0, 0, 0, 0});
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(4, 0, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2, 0, 0, 0, 0}), 8);
     }
-
     { // n < capacity , n < size
         auto vec = makeVector({1, 2, 3, 4});
         vec.reserve(6);
         trace_int::init();
         vec.resize(2);
-        ASSERT_TRUE(check_trace(0, 0, 0, 0, 0, 2) &&
-                    vec.size() == 2 &&
-                    vec.capacity() == 6);
-        auto res = makeVector({1, 2});
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, 0, 0, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2}), 6);
     }
-
     { // n < capacity, n > size
         auto vec = makeVector({1, 2});
         vec.reserve(6);
         trace_int::init();
         vec.resize(4);
-        ASSERT_TRUE(check_trace(2, 0, 0, 0, 0, 0) &&
-                    vec.size() == 4 &&
-                    vec.capacity() == 6);
-        auto res = makeVector({1, 2, 0, 0});
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(2, 0, 0, 0, 0, 0);
+        CHECK_VECTOR(vec, makeVector({1, 2, 0, 0}), 6);
     }
-
     { // n = capacity = size
         auto vec = makeVector({1, 2, 3, 4});
         auto res = vec;
         trace_int::init();
         vec.resize(4);
-        ASSERT_TRUE(check_trace(0, 0, 0, 0, 0, 0) &&
-                    vec.size() == 4 &&
-                    vec.capacity() == 4);
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, 0, 0, 0, 0, 0);
+        CHECK_VECTOR(vec, res, 4);
     }
 }
 
@@ -274,10 +242,8 @@ TEST(VectorTest, assign) {
         auto old_size = vec.size();
         trace_int::init();
         vec.assign(res.begin(), res.end());
-        ASSERT_TRUE(check_trace(0, res.size(), 0, 0, 0, old_size) &&
-                    vec.size() == vec.capacity() &&
-                    vec.size() == res.size());
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, res.size(), 0, 0, 0, old_size);
+        CHECK_VECTOR(vec, res, vec.size());
     }
     { // assign: count < size, capacity
         auto vec = makeVector({1, 2, 3});
@@ -285,10 +251,8 @@ TEST(VectorTest, assign) {
         auto res = makeVector({10, 20});
         trace_int::init();
         vec.assign(res.begin(), res.end());
-        ASSERT_TRUE(check_trace(0, 0, 0, res.size(), 0, 1) &&
-                    vec.size() == 2 &&
-                    vec.capacity() == 4);
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, 0, 0, res.size(), 0, 1);
+        CHECK_VECTOR(vec, res, 4);
     }
     { // assign: size < count < capacity
         auto vec = makeVector({1, 2, 3});
@@ -296,17 +260,15 @@ TEST(VectorTest, assign) {
         auto res = makeVector({10, 20, 30, 40});
         trace_int::init();
         vec.assign(res.begin(), res.end());
-        ASSERT_EQ(vec, res);
-        ASSERT_TRUE(check_trace(0, 1, 0, 3, 0, 0) &&
-                    vec.capacity() == 6);
-
+        CHECK_TRACE(0, 1, 0, 3, 0, 0);
+        CHECK_VECTOR(vec, res, 6);
     }
     { // initializer list
         auto vec = makeVector();
         auto list = {trace_int(10), trace_int(20), trace_int(30)};
         vec.assign(list.begin(), list.end());
         auto res = makeVector({10, 20, 30});
-        ASSERT_EQ(vec, res);
+        CHECK_VECTOR(vec, res, res.capacity());
     }
 
     trace_int val(10);
@@ -316,10 +278,8 @@ TEST(VectorTest, assign) {
         auto old_size = vec.size();
         trace_int::init();
         vec.assign(res.size(), val);
-        ASSERT_TRUE(check_trace(0, res.size(), 0, 0, 0, old_size) &&
-                    vec.size() == vec.capacity() &&
-                    vec.size() == res.size());
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, res.size(), 0, 0, 0, old_size);
+        CHECK_VECTOR(vec, res, vec.capacity());
     }
     { // assign: count < size, capacity
         auto vec = makeVector({1, 2, 3});
@@ -327,10 +287,8 @@ TEST(VectorTest, assign) {
         auto res = makeVector({10, 10});
         trace_int::init();
         vec.assign(res.size(), val);
-        ASSERT_TRUE(check_trace(0, 0, 0, res.size(), 0, 1) &&
-                    vec.size() == 2 &&
-                    vec.capacity() == 4);
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, 0, 0, res.size(), 0, 1);
+        CHECK_VECTOR(vec, res, 4);
     }
     { // assign: size < count < capacity
         auto vec = makeVector({1, 2, 3});
@@ -338,9 +296,8 @@ TEST(VectorTest, assign) {
         auto res = makeVector({10, 10, 10, 10});
         trace_int::init();
         vec.assign(res.size(), val);
-        ASSERT_EQ(vec, res);
-        ASSERT_TRUE(check_trace(0, 1, 0, 3, 0, 0) &&
-                    vec.capacity() == 6);
+        CHECK_TRACE(0, 1, 0, 3, 0, 0);
+        CHECK_VECTOR(vec, res, 6);
     }
     { // input iterator
         std::stringstream stream;
@@ -360,10 +317,9 @@ TEST(VectorTest, erase) {
         auto res = makeVector({1, 3, 4});
         trace_int::init();
         auto next = vec.erase(vec.begin() + 1);
-        ASSERT_EQ(vec, res);
         ASSERT_EQ(next, vec.begin() + 1);
-        ASSERT_TRUE(check_trace(0, 0, 0, 0, 2, 1) &&
-                    vec.capacity() == 4);
+        CHECK_TRACE(0, 0, 0, 0, 2, 1);
+        CHECK_VECTOR(vec, res, 4);
     }
     { // erase first, last
         auto vec = makeVector({1, 2, 3, 4});
@@ -386,10 +342,9 @@ TEST(VectorTest, erase) {
         auto res = makeVector({1, 2, 6, 7});
         trace_int::init();
         auto next = vec.erase(vec.begin() + 2, vec.begin() + 5);
-        ASSERT_EQ(vec, res);
         ASSERT_EQ(next, vec.begin() + 2);
-        ASSERT_TRUE(check_trace(0, 0, 0, 0, 2, 3) &&
-                    vec.capacity() == 7);
+        CHECK_TRACE(0, 0, 0, 0, 2, 3);
+        CHECK_VECTOR(vec, res, 7);
     }
     { // erase range in end
         auto vec = makeVector({1, 2, 3, 4});
@@ -417,27 +372,22 @@ TEST(VectorTest, erase) {
 TEST(VectorTest, insert) {
     { // some insert;
         auto vec = makeVector();
-        trace_int v1(1), v2(2), v3(3), v4(4);
+        std::initializer_list<trace_int> list{1, 2, 3, 4};
         trace_int::init();
-        vec.insert(vec.begin(), v1);
-        vec.insert(vec.begin(), v2);
-        vec.insert(vec.begin(), v3);
-        vec.insert(vec.begin(), v4);
-        ASSERT_TRUE(check_trace(0, 3, 4, 1, 2, 3) &&
-                    vec.capacity() == 4);
+        for (const auto& v : list) {
+            vec.insert(vec.begin(), v);
+        }
+        CHECK_TRACE(0, 3, 4, 1, 2, 3);
         auto res = makeVector({4, 3, 2, 1});
-        EXPECT_EQ(vec, res);
+        CHECK_VECTOR(vec, res, 4);
     }
     { // push back
         auto vec = makeVector({1, 2});
         trace_int val(3);
         trace_int::init();
         vec.insert(vec.end(), val);
-        ASSERT_TRUE(check_trace(0, 1, 2, 0, 0, 2) &&
-                    vec.size() == 3 &&
-                    vec.capacity() == 4);
-        auto res = makeVector({1, 2, 3});
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2, 3}), 4);
     }
 }
 
@@ -445,26 +395,20 @@ TEST(VectorTest, emplace) {
     { // some insert;
         auto vec = makeVector();
         trace_int::init();
-        vec.emplace(vec.begin(), 1);
-        vec.emplace(vec.begin(), 2);
-        vec.emplace(vec.begin(), 3);
-        vec.emplace(vec.begin(), 4);
-        ASSERT_EQ(trace_int::basic_construct, 4);
-        ASSERT_EQ(trace_int::operator_rval_construct, 2);
-        ASSERT_TRUE(check_trace(4, 0, 4, 0, 2, 4) &&
-                    vec.capacity() == 4);
-        auto res = makeVector({4, 3, 2, 1});
-        EXPECT_EQ(vec, res);
+        for (int i = 1; i < 5; ++i) {
+            vec.emplace(vec.begin(), i);
+        }
+        CHECK_TRACE(4, 0, 4, 0, 2, 4);
+        CHECK_VECTOR(vec, makeVector({4, 3, 2, 1}), 4);
     }
     { // push back
         auto vec = makeVector({1, 2});
         trace_int val(3);
         trace_int::init();
         vec.emplace(vec.end(), val);
-        ASSERT_TRUE(check_trace(0, 1, 2, 0, 0, 2) &&
-                    vec.size() == 3 &&
-                    vec.capacity() == 4);
-        auto res = makeVector({1, 2, 3});
-        ASSERT_EQ(vec, res);
+        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2, 3}), 4);
     }
 }
+
+#undef CHECK_TRACE

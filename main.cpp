@@ -9,5 +9,8 @@
 #include "include/vector.h"
 
 int main() {
-    std::vector<int> a;
+    std::vector<int> a{1, 2, 3};
+    a.resize(4);
+    std::cout << a.capacity();
+
 }
