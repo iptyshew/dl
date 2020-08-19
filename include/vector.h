@@ -251,14 +251,31 @@ public: // other modification members
         return insert_impl(pos - begin(), std::move(value));
     }
 
-    template<class I>
-    std::enable_if<is_forward_iter<I>::value, iterator>
-    insert(const_iterator pos, I first, I last) {
-        (void)pos; (void)first; (void)last;
+    template<typename I>
+    std::enable_if_t<is_forward_iter<I>::value, iterator>
+    insert(const_iterator cpos, I first, I last) {
+        auto n = std::distance(first, last);
+        auto idx = cpos - begin();
+        auto pos = begin_ + idx;
+        if (size() + n > capacity()) {
+            split_buffer<value_type, allocator_type&> buff(static_cast<size_type>(idx), expand(size() + n), alloc());
+            buff.construct_at_end(first, last);
+            swap_out_buffer(buff, pos);
+        } else {
+            if (auto tail = end_ - pos; tail < n) {
+                auto m = first;
+                std::advance(m, tail);
+                uninit_copy(alloc(), m, last, end_);
+                last = m;
+            }
+            right_shift(pos, n);
+            std::copy(first, last, pos);
+        }
+        return begin_ + idx;
     }
 
-    template<class I>
-    std::enable_if<is_input_iter<I>::value && !is_forward_iter<I>::value, iterator>
+    template<typename I>
+    std::enable_if_t<is_input_iter<I>::value && !is_forward_iter<I>::value, iterator>
     insert(const_iterator pos, I first, I last) {
         (void)pos; (void)first; (void)last;
     }
@@ -276,18 +293,17 @@ public: // other modification members
         auto idx = cpos - begin();
         auto pos = begin_ + idx;
         if (end_ == end_cap()) {
-            split_buffer<value_type, allocator_type&> buff(size() + 1, expand(size() + 1), alloc());
+            split_buffer<value_type, allocator_type&> buff(idx, expand(size() + 1), alloc());
+            buff.emplace_back(std::forward<Args>(args)...);
             swap_out_buffer(buff, pos);
-            pos = begin_ + idx;
         } else if (pos != end_) {
-            auto last = end_ - 1;
-            unsafe_insert(end_, std::move(*last));
-            std::move_backward(pos, last, end_ - 1);
+            right_shift(pos, 1);
             allocator_traits::destroy(alloc(), pos);
+            allocator_traits::construct(alloc(), pos, std::forward<Args>(args)...);
         } else {
-            ++end_;
+            unsafe_insert(end_, std::forward<Args>(args)...);
         }
-        allocator_traits::construct(alloc(), pos, std::forward<Args>(args)...);
+
         return begin() + idx;
     }
 
@@ -348,7 +364,7 @@ private:
 
     void swap_out_buffer(split_buffer<value_type, allocator_type&>& buff, pointer pos) {
         uninit_move(buff.alloc(), begin_, pos, buff.begin);
-        uninit_move(buff.alloc(), pos, end_, buff.begin + (pos - begin_ + 1));
+        buff.end = uninit_move(buff.alloc(), pos, end_, buff.end);
         std::swap(begin_, buff.begin);
         std::swap(end_, buff.end);
         std::swap(end_cap(), buff.end_cap());
@@ -384,13 +400,11 @@ private:
     iterator insert_impl(difference_type idx, U&& value) {
         auto pos = begin_ + idx;
         if (end_ == end_cap()) {
-            split_buffer<value_type, allocator_type&> buff(size(), expand(size() + 1), alloc());
+            split_buffer<value_type, allocator_type&> buff(idx, expand(size() + 1), alloc());
+            buff.emplace_back(std::forward<U>(value));
             swap_out_buffer(buff, pos);
-            unsafe_insert(begin_ + idx, std::forward<U>(value));
         } else if (pos != end_) {
-            auto last = end_ - 1;
-            unsafe_insert(end_, std::move(*last));
-            std::move_backward(pos, last, end_ - 1);
+            right_shift(pos, 1);
             *pos = std::forward<U>(value);
         } else {
             unsafe_insert(end_, std::forward<U>(value));
@@ -405,7 +419,7 @@ private:
 
     void create(size_t n) {
         allocate_n(n);
-        while(n-- != 0) {
+        while (n-- != 0) {
             unsafe_insert(end_);
         }
     }
@@ -447,6 +461,15 @@ private:
             allocator_traits::construct(alloc(), begin, val);
         }
         return begin;
+    }
+
+    void right_shift(pointer pos, difference_type n) {
+        auto part = end_ - std::min(n, end_ - pos);
+        uninit_move(alloc(), part, end_, part + n);
+        if (part != pos) {
+            std::move_backward(pos, part, end_);
+        }
+        end_ += n;
     }
 
 private:

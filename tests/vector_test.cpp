@@ -389,6 +389,50 @@ TEST(VectorTest, insert) {
         CHECK_TRACE(0, 1, 2, 0, 0, 2);
         CHECK_VECTOR(vec, makeVector({1, 2, 3}), 4);
     }
+    {
+        auto vec = makeVector({0, 3, 4, 5});
+        vec.reserve(6);
+        std::initializer_list<trace_int> list{1, 2};
+        trace_int::init();
+        vec.insert(vec.begin() + 1, list.begin(), list.end());
+//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({0, 1, 2, 3, 4, 5}), 6);
+    }
+    {
+        auto vec = makeVector({0, 1, 2, 3, 4, 5});
+        vec.reserve(12);
+        dl::vector<trace_int> list(6, 6);
+        trace_int::init();
+        vec.insert(vec.begin() + 2, list.begin(), list.end());
+//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({0, 1, 6,6,6,6,6,6, 2, 3, 4, 5}), 12);
+    }
+    {
+        auto vec = makeVector({1, 2, 3});
+        vec.reserve(6);
+        std::initializer_list<trace_int> list{4, 5};
+        trace_int::init();
+        vec.insert(vec.end(), list.begin(), list.end());
+//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2, 3, 4, 5}), 6);
+    }
+    {
+        auto vec = makeVector({3, 4, 5});
+        vec.reserve(5);
+        std::initializer_list<trace_int> list{1, 2};
+        trace_int::init();
+        vec.insert(vec.begin(), list.begin(), list.end());
+//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2, 3, 4, 5}), 5);
+    }
+    {
+        auto vec = makeVector({1, 4, 5});
+        std::initializer_list<trace_int> list{2, 3};
+        trace_int::init();
+        vec.insert(vec.begin() + 1, list.begin(), list.end());
+//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2, 3, 4, 5}), 6);
+    }
 }
 
 TEST(VectorTest, emplace) {

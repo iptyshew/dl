@@ -6,7 +6,7 @@
 
 namespace dl {
 
-template<typename T, typename Allocator = std::allocator<T>>
+template<typename T, typename Allocator>
 class split_buffer
 {
 public:
@@ -32,6 +32,19 @@ public:
     void clear() {
         while (begin != end) {
             allocator_traits::destroy(alloc(), end-- - 1);
+        }
+    }
+
+    template<typename... Args>
+    void emplace_back(Args&&... u) {
+        allocator_traits::construct(alloc(), end, std::forward<Args>(u)...);
+        ++end;
+    }
+
+    template<typename I>
+    void construct_at_end(I first, I last) {
+        for (; first != last; ++first, ++end) {
+            allocator_traits::construct(alloc(), end, *first);
         }
     }
 

@@ -1,5 +1,7 @@
 #pragma once
 #include <cstddef>
+#include <iterator>
+#include <ostream>
 
 template<typename T>
 class trace_type
@@ -55,6 +57,12 @@ public:
     static size_t operator_rval_construct;
     static size_t destruct;
 };
+
+template<typename T>
+std::ostream& operator<<(std::ostream& stream, const trace_type<T>& t) {
+    stream << t.value;
+    return stream;
+}
 
 template<typename T>
 bool operator==(const trace_type<T>& lhs, const trace_type<T>& rhs) {
