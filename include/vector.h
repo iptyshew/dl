@@ -274,18 +274,38 @@ public: // other modification members
         return begin_ + idx;
     }
 
-    template<typename I>
-    std::enable_if_t<is_input_iter<I>::value && !is_forward_iter<I>::value, iterator>
-    insert(const_iterator pos, I first, I last) {
-        (void)pos; (void)first; (void)last;
-    }
-
-    iterator insert(const_iterator pos, size_type count, const value_type& value) {
-        (void)pos; (void)count; (void)value;
+    iterator insert(const_iterator cpos, size_type n, const value_type& value) {
+        auto idx = cpos - begin();
+        auto pos = begin_ + idx;
+        if (size() + n > capacity()) {
+            split_buffer<value_type, allocator_type&> buff(static_cast<size_type>(idx), expand(size() + n), alloc());
+            buff.construct_at_end(n, value);
+            swap_out_buffer(buff, pos);
+        } else {
+            auto count = static_cast<difference_type>(n);
+            if (auto tail = end_ - pos; tail < count) {
+                construct(end_, end_ + (n - tail), value);
+                count = tail;
+            }
+            right_shift(pos, n);
+            std::fill(pos, pos + count, value);
+        }
+        return begin_ + idx;
     }
 
     iterator insert(const_iterator pos, std::initializer_list<value_type> list) {
         insert(pos, list.begin(), list.end());
+    }
+
+    template<typename I>
+    std::enable_if_t<is_input_iter<I>::value && !is_forward_iter<I>::value, iterator>
+    insert(const_iterator cpos, I first, I last) {
+        auto pos = begin_ + (cpos - begin());
+        auto old_end = end_;
+        for (; first != last && end_ != end_cap(); ++first) {
+            unsafe_insert(end_, *first);
+        }
+        std::rotate(pos, old_end, end_);
     }
 
     template<typename... Args>

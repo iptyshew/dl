@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <gtest/gtest.h>
 #include <iterator>
+#include <sstream>
 #include "vector.h"
 #include "test_type.h"
 
@@ -389,49 +390,81 @@ TEST(VectorTest, insert) {
         CHECK_TRACE(0, 1, 2, 0, 0, 2);
         CHECK_VECTOR(vec, makeVector({1, 2, 3}), 4);
     }
-    {
+}
+
+TEST(VectorTest, range_insert) {
+    { // range len < end() - pos
         auto vec = makeVector({0, 3, 4, 5});
         vec.reserve(6);
         std::initializer_list<trace_int> list{1, 2};
+        auto pos = vec.begin() + 1;
         trace_int::init();
-        vec.insert(vec.begin() + 1, list.begin(), list.end());
-//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        EXPECT_EQ(pos, vec.insert(vec.begin() + 1, list.begin(), list.end()));
+        CHECK_TRACE(0, 0, 2, 2, 1, 0);
         CHECK_VECTOR(vec, makeVector({0, 1, 2, 3, 4, 5}), 6);
     }
-    {
+    { // range_len > end() - pos
         auto vec = makeVector({0, 1, 2, 3, 4, 5});
         vec.reserve(12);
         dl::vector<trace_int> list(6, 6);
+        auto pos = vec.begin() + 2;
         trace_int::init();
-        vec.insert(vec.begin() + 2, list.begin(), list.end());
-//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        EXPECT_EQ(pos, vec.insert(vec.begin() + 2, list.begin(), list.end()));
+        CHECK_TRACE(0, 2, 4, 4, 0, 0);
         CHECK_VECTOR(vec, makeVector({0, 1, 6,6,6,6,6,6, 2, 3, 4, 5}), 12);
     }
-    {
-        auto vec = makeVector({1, 2, 3});
-        vec.reserve(6);
-        std::initializer_list<trace_int> list{4, 5};
-        trace_int::init();
-        vec.insert(vec.end(), list.begin(), list.end());
-//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
-        CHECK_VECTOR(vec, makeVector({1, 2, 3, 4, 5}), 6);
-    }
-    {
-        auto vec = makeVector({3, 4, 5});
-        vec.reserve(5);
-        std::initializer_list<trace_int> list{1, 2};
-        trace_int::init();
-        vec.insert(vec.begin(), list.begin(), list.end());
-//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
-        CHECK_VECTOR(vec, makeVector({1, 2, 3, 4, 5}), 5);
-    }
-    {
+    { // size() + range len > capacity()
         auto vec = makeVector({1, 4, 5});
         std::initializer_list<trace_int> list{2, 3};
         trace_int::init();
-        vec.insert(vec.begin() + 1, list.begin(), list.end());
-//        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        auto res = vec.insert(vec.begin() + 1, list.begin(), list.end());
+        EXPECT_EQ(res, vec.begin() + 1);
+        CHECK_TRACE(0, 2, 3, 0, 0, 3);
         CHECK_VECTOR(vec, makeVector({1, 2, 3, 4, 5}), 6);
+    }
+}
+
+TEST(VectorTest, insert_n_val) {
+    { // range len < end() - pos
+        auto vec = makeVector({0, 3, 4, 5});
+        vec.reserve(6);
+        trace_int val(10);
+        trace_int::init();
+        vec.insert(vec.begin() + 1, 2, val);
+        CHECK_TRACE(0, 0, 2, 2, 1, 0);
+        CHECK_VECTOR(vec, makeVector({0, 10, 10, 3, 4, 5}), 6);
+    }
+    { // range_len > end() - pos
+        auto vec = makeVector({0, 1, 2, 3, 4, 5});
+        vec.reserve(12);
+        trace_int val(6);
+        trace_int::init();
+        vec.insert(vec.begin() + 2, 6, val);
+        CHECK_TRACE(0, 2, 4, 4, 0, 0);
+        CHECK_VECTOR(vec, makeVector({0, 1, 6,6,6,6,6,6, 2, 3, 4, 5}), 12);
+    }
+    { // size() + range len > capacity()
+        auto vec = makeVector({1, 4, 5});
+        trace_int val(6);
+        trace_int::init();
+        vec.insert(vec.begin() + 1, 2, val);
+        CHECK_TRACE(0, 2, 3, 0, 0, 3);
+        CHECK_VECTOR(vec, makeVector({1, 6, 6, 4, 5}), 6);
+    }
+}
+
+TEST(VectorTest, insert_input_iter) {
+    { // range_lin + size() <= capacity
+        auto vec = makeVector({0, 3, 4, 5});
+        vec.reserve(6);
+        std::stringstream stream;
+        stream << "1" << " 2";
+        std::istream_iterator<int> first(stream);
+        std::istream_iterator<int> last;
+        trace_int::init();
+        vec.insert(vec.begin() + 1, first, last);
+//        CHECK_TRACE(0, 0, 2, 2, 1, 0);
+        CHECK_VECTOR(vec, makeVector({0, 1, 2, 3, 4, 5}), 6);
     }
 }
 

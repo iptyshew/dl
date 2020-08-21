@@ -48,6 +48,13 @@ public:
         }
     }
 
+    void construct_at_end(size_type n, const value_type& value) {
+        while (n-- != 0) {
+            allocator_traits::construct(alloc(), end, value);
+            ++end;
+        }
+    }
+
     ~split_buffer() {
         clear();
         allocator_traits::deallocate(alloc(), begin, capacity());
