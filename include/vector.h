@@ -88,7 +88,7 @@ public: // constructors
     }
 
     vector(vector&& other)
-        : vector(std::move(other.alloc())) {
+        : vector(other.alloc()) {
         begin_ = other.begin_;
         end_ = other.end_;
         end_cap() = other.end_cap();
@@ -172,7 +172,7 @@ public: // assigns
             for (auto it = begin_; it != end_; ++it, ++first) {
                 *it = *first;
             }
-            end_ = uninit_copy(alloc(), first, last, end_);
+            end_ = uninit_copy(first, last, end_);
         }
     }
 
@@ -265,7 +265,7 @@ public: // other modification members
             if (auto tail = end_ - pos; tail < n) {
                 auto m = first;
                 std::advance(m, tail);
-                uninit_copy(alloc(), m, last, end_);
+                uninit_copy(m, last, end_);
                 last = m;
             }
             right_shift(pos, n);
@@ -454,7 +454,7 @@ private:
     template<typename I>
     void create(I first, I last, std::optional<size_type> n = std::nullopt) {
         allocate_n(n ? *n : std::distance(first, last));
-        end_ = uninit_copy(alloc(), first, last, end_);
+        end_ = uninit_copy(first, last, end_);
     }
 
     void clear_and_free() {
@@ -492,6 +492,14 @@ private:
         end_ += n;
     }
 
+    template<typename I, typename O>
+    O uninit_copy(I begin, I end, O res) {
+        for (; begin != end; ++begin, ++res) {
+            allocator_traits::construct(alloc(), res, *begin);
+        }
+        return res;
+    }
+
 private:
     template<typename I, typename O>
     static O uninit_move(allocator_type& alloc, I begin, I end, O res) {
@@ -501,13 +509,6 @@ private:
         return res;
     }
 
-    template<typename I, typename O>
-    static O uninit_copy(allocator_type& alloc, I begin, I end, O res) {
-        for (; begin != end; ++begin, ++res) {
-            allocator_traits::construct(alloc, res, *begin);
-        }
-        return res;
-    }
 
 private:
     pointer begin_ = nullptr;
