@@ -12,6 +12,7 @@
 #include "compressed_pair.h"
 #include "split_buffer.h"
 #include "type_utils.h"
+#include "algorithm.h"
 
 namespace dl {
 
@@ -172,7 +173,7 @@ public: // assigns
             for (auto it = begin_; it != end_; ++it, ++first) {
                 *it = *first;
             }
-            end_ = uninit_copy(first, last, end_);
+            end_ = uninit_copy(alloc(), first, last, end_);
         }
     }
 
@@ -265,7 +266,7 @@ public: // other modification members
             if (auto tail = end_ - pos; tail < n) {
                 auto m = first;
                 std::advance(m, tail);
-                uninit_copy(m, last, end_);
+                uninit_copy(alloc(), m, last, end_);
                 last = m;
             }
             right_shift(pos, n);
@@ -300,12 +301,19 @@ public: // other modification members
     template<typename I>
     std::enable_if_t<is_input_iter<I>::value && !is_forward_iter<I>::value, iterator>
     insert(const_iterator cpos, I first, I last) {
-        auto pos = begin_ + (cpos - begin());
-        auto old_end = end_;
+        auto idx = cpos - begin();
+        auto old_size = size();
         for (; first != last && end_ != end_cap(); ++first) {
             unsafe_insert(end_, *first);
         }
-        std::rotate(pos, old_end, end_);
+        split_buffer<value_type, allocator_type&> buff(alloc());
+        if (first != last) {
+            buff.construct_at_end(first, last);
+            reserve(expand(size() + buff.size()));
+        }
+        insert(std::rotate(begin_ + idx, begin_ + old_size, end_),
+               std::make_move_iterator(buff.begin), std::make_move_iterator(buff.end));
+        return begin() + idx;
     }
 
     template<typename... Args>
@@ -454,7 +462,7 @@ private:
     template<typename I>
     void create(I first, I last, std::optional<size_type> n = std::nullopt) {
         allocate_n(n ? *n : std::distance(first, last));
-        end_ = uninit_copy(first, last, end_);
+        end_ = uninit_copy(alloc(), first, last, end_);
     }
 
     void clear_and_free() {
@@ -485,30 +493,11 @@ private:
 
     void right_shift(pointer pos, difference_type n) {
         auto part = end_ - std::min(n, end_ - pos);
-        uninit_move(alloc(), part, end_, part + n);
-        if (part != pos) {
-            std::move_backward(pos, part, end_);
+        if (part != end_) {
+            end_ = uninit_move(alloc(), part, end_, part + n);
+            std::move_backward(pos, part, end_ - n);
         }
-        end_ += n;
     }
-
-    template<typename I, typename O>
-    O uninit_copy(I begin, I end, O res) {
-        for (; begin != end; ++begin, ++res) {
-            allocator_traits::construct(alloc(), res, *begin);
-        }
-        return res;
-    }
-
-private:
-    template<typename I, typename O>
-    static O uninit_move(allocator_type& alloc, I begin, I end, O res) {
-        for (; begin != end; ++begin, ++res) {
-            allocator_traits::construct(alloc, res, std::move_if_noexcept(*begin));
-        }
-        return res;
-    }
-
 
 private:
     pointer begin_ = nullptr;

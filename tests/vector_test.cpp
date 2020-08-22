@@ -422,6 +422,15 @@ TEST(VectorTest, range_insert) {
         CHECK_TRACE(0, 2, 3, 0, 0, 3);
         CHECK_VECTOR(vec, makeVector({1, 2, 3, 4, 5}), 6);
     }
+    { // zero range
+        auto vec = makeVector({1, 4, 5});
+        std::initializer_list<trace_int> list;
+        trace_int::init();
+        auto res = vec.insert(vec.begin() + 1, list.begin(), list.end());
+        EXPECT_EQ(res, vec.begin() + 1);
+        CHECK_TRACE(0, 0, 0, 0, 0, 0);
+        CHECK_VECTOR(vec, makeVector({1, 4, 5}), 3);
+    }
 }
 
 TEST(VectorTest, insert_n_val) {
@@ -454,7 +463,7 @@ TEST(VectorTest, insert_n_val) {
 }
 
 TEST(VectorTest, insert_input_iter) {
-    { // range_lin + size() <= capacity
+    { // range_len + size() <= capacity
         auto vec = makeVector({0, 3, 4, 5});
         vec.reserve(6);
         std::stringstream stream;
@@ -462,9 +471,23 @@ TEST(VectorTest, insert_input_iter) {
         std::istream_iterator<int> first(stream);
         std::istream_iterator<int> last;
         trace_int::init();
-        vec.insert(vec.begin() + 1, first, last);
-//        CHECK_TRACE(0, 0, 2, 2, 1, 0);
+        auto res = vec.insert(vec.begin() + 1, first, last);
+        EXPECT_EQ(res, vec.begin() + 1);
+        CHECK_TRACE(2, 0, 4, 0, 8, 4);
         CHECK_VECTOR(vec, makeVector({0, 1, 2, 3, 4, 5}), 6);
+    }
+    { // range_len + size() > capacity
+        auto vec = makeVector({0, 3, 4, 5});
+        vec.reserve(6);
+        std::stringstream stream;
+        stream << "10" << " 20" << " 30" << " 40";
+        std::istream_iterator<int> first(stream);
+        std::istream_iterator<int> last;
+        trace_int::init();
+        auto res = vec.insert(vec.begin() + 1, first, last);
+        EXPECT_EQ(res, vec.begin() + 1);
+        CHECK_TRACE(4, 0, 12, 0, 11, 12);
+        CHECK_VECTOR(vec, makeVector({0, 10, 20, 30, 40, 3, 4, 5}), 12);
     }
 }
 
