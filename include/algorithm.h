@@ -19,4 +19,28 @@ O uninit_copy(Allocator& alloc, I begin, I end, O res) {
     return res;
 }
 
+template<typename I, typename Allocator>
+I construct(Allocator& alloc, I begin, I end) {
+    for (; begin != end; ++begin) {
+        std::allocator_traits<Allocator>::construct(alloc, begin);
+    }
+    return begin;
+}
+
+template<typename I, typename T, typename Allocator>
+I construct(Allocator& alloc, I begin, I end, const T& val) {
+    for (; begin != end; ++begin) {
+        std::allocator_traits<Allocator>::construct(alloc, begin, val);
+    }
+    return begin;
+}
+
+template<typename I, typename Allocator>
+I destroy(Allocator& alloc, I begin, I end) {
+    for (auto it = begin; it != end; ++it) {
+        std::allocator_traits<Allocator>::destroy(alloc, it);
+    }
+    return begin;
+}
+
 } // namespace dl

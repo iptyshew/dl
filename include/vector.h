@@ -1,14 +1,12 @@
 #pragma once
 #include <cstddef>
 #include <algorithm>
-#include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
-#include <utility>
 #include "compressed_pair.h"
 #include "split_buffer.h"
 #include "type_utils.h"
@@ -54,19 +52,16 @@ public: // constructors
         create(count, value);
     }
 
-    template<typename I>
-    vector(I first,
-           typename std::enable_if_t<is_forward_iter<I>::value, I> last,
-           const allocator_type& a = allocator_type())
+    template<typename I,
+             std::enable_if_t<is_forward_iter<I>::value, int> = 0>
+    vector(I first, I last, const allocator_type& a = allocator_type())
         : vector(a) {
         create(first, last);
     }
 
-    template<typename I>
-    vector(I first,
-           typename std::enable_if_t<is_input_iter<I>::value &&
-                                    !is_forward_iter<I>::value, I> last,
-           const allocator_type& a = allocator_type())
+    template<typename I,
+             std::enable_if_t<is_input_iter<I>::value && !is_forward_iter<I>::value, int> = 0>
+    vector(I first, I last, const allocator_type& a = allocator_type())
         : vector(a) {
         for (; first != last; ++first) {
             emplace_back(*first);
@@ -168,7 +163,7 @@ public: // assigns
             clear_and_free();
             create(first, last, n);
         } else if (n < size()) {
-            end_ = clear(std::copy(first, last, begin_), end_);
+            end_ = destroy(alloc(), std::copy(first, last, begin_), end_);
         } else if (n > size()) {
             for (auto it = begin_; it != end_; ++it, ++first) {
                 *it = *first;
@@ -196,16 +191,16 @@ public: // assigns
             create(n, value);
         } else if (n < size()) {
             std::fill(begin_, begin_ + n, value);
-            end_ = clear(begin_ + n, end_);
+            end_ = destroy(alloc(), begin_ + n, end_);
         } else if (n > size()) {
             std::fill(begin_, end_, value);
-            end_ = construct(end_, begin_ + n, value);
+            end_ = construct(alloc(), end_, begin_ + n, value);
         }
     }
 
 public: // other modification members
     void clear() noexcept {
-        end_ = clear(begin_, end_);
+        end_ = destroy(alloc(), begin_, end_);
     }
 
     void reserve(size_type n) {
@@ -217,13 +212,13 @@ public: // other modification members
 
     void resize(size_type n) {
         resize_impl(n, [this](pointer begin, pointer end) {
-                           return construct(begin, end);
+                           return construct(alloc(), begin, end);
                        });
     }
 
     void resize(size_type n, const value_type& value) {
         resize_impl(n, [&](pointer begin, pointer end) {
-                           return construct(begin, end, value);
+                           return construct(alloc(), begin, end, value);
                        });
     }
 
@@ -285,7 +280,7 @@ public: // other modification members
         } else {
             auto count = static_cast<difference_type>(n);
             if (auto tail = end_ - pos; tail < count) {
-                construct(end_, end_ + (n - tail), value);
+                construct(alloc(), end_, end_ + (n - tail), value);
                 count = tail;
             }
             right_shift(pos, n);
@@ -351,7 +346,7 @@ public: // other modification members
         auto f = first - begin();
         auto l = last - begin();
         std::move(begin_ + l, end_, begin_ + f);
-        end_ = clear(begin_ + size() - (l - f), end_);
+        end_ = destroy(alloc(), begin_ + size() - (l - f), end_);
         return begin() + f;
     }
 
@@ -418,7 +413,7 @@ private:
             constructor(buff.begin + sz, buff.end);
             swap_out_buffer(buff);
         } else if (n < sz) {
-            end_ = clear(begin_ + n, end_);
+            end_ = destroy(alloc(), begin_ + n, end_);
         } else if (n > sz) {
             end_ = constructor(begin_ + sz, begin_ + n);
         }
@@ -460,7 +455,8 @@ private:
     }
 
     template<typename I>
-    void create(I first, I last, std::optional<size_type> n = std::nullopt) {
+    std::enable_if_t<is_input_iter<I>::value, void>
+    create(I first, I last, std::optional<size_type> n = std::nullopt) {
         allocate_n(n ? *n : std::distance(first, last));
         end_ = uninit_copy(alloc(), first, last, end_);
     }
@@ -468,27 +464,6 @@ private:
     void clear_and_free() {
         clear();
         allocator_traits::deallocate(alloc(), begin_, capacity());
-    }
-
-    pointer clear(pointer begin, pointer end) {
-        for (auto it = begin; it != end; ++it) {
-            allocator_traits::destroy(alloc(), it);
-        }
-        return begin;
-    }
-
-    pointer construct(pointer begin, pointer end) {
-        for (; begin != end; ++begin) {
-            allocator_traits::construct(alloc(), begin);
-        }
-        return begin;
-    }
-
-    pointer construct(pointer begin, pointer end, const value_type& val) {
-        for (; begin != end; ++begin) {
-            allocator_traits::construct(alloc(), begin, val);
-        }
-        return begin;
     }
 
     void right_shift(pointer pos, difference_type n) {
