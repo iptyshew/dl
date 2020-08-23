@@ -43,13 +43,15 @@ public: // constructors
     explicit vector(size_type count,
                     const allocator_type& a = allocator_type())
         : vector(a) {
-        create(count);
+        allocate_n(count);
+        end_ = construct(alloc(), begin_, begin_ + count);
     }
 
     vector(size_type count, const value_type& value,
            const allocator_type& a = allocator_type())
         : vector(a) {
-        create(count, value);
+        allocate_n(count);
+        end_ = construct(alloc(), begin_, begin_ + count, value);
     }
 
     template<typename I,
@@ -165,11 +167,23 @@ public: // assigns
             swap(buff);
         } else if (n < size()) {
             end_ = destroy(alloc(), std::copy(first, last, begin_), end_);
-        } else if (n >= size()) {
-            for (auto it = begin_; it != end_; ++it, ++first) {
-                *it = *first;
-            }
+        } else {
+            first = input_copy_n(first, size(), begin_);
             end_ = uninit_copy(alloc(), first, last, end_);
+        }
+    }
+
+    void assign(size_type n, const value_type& value) {
+        auto new_end = begin_ + n;
+        if (new_end > end_cap()) {
+            split_buffer<value_type, allocator_type&> buff(0, n, alloc());
+            buff.construct_at_end(n, value);
+            swap(buff);
+        } else {
+            std::fill(begin_, std::min(new_end, end_), value);
+            end_ = (new_end < end_)
+                ? destroy(alloc(), new_end, end_)
+                : construct(alloc(), end_, new_end, value);
         }
     }
 
@@ -184,20 +198,6 @@ public: // assigns
 
     void assign(std::initializer_list<value_type> list) {
         assign(list.begin(), list.end());
-    }
-
-    void assign(size_type n, const value_type& value) {
-        if (n > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(0, n, alloc());
-            buff.construct_at_end(n, value);
-            swap(buff);
-        } else if (n < size()) {
-            std::fill(begin_, begin_ + n, value);
-            end_ = destroy(alloc(), begin_ + n, end_);
-        } else if (n >= size()) {
-            std::fill(begin_, end_, value);
-            end_ = construct(alloc(), end_, begin_ + n, value);
-        }
     }
 
 public: // other modification members
@@ -235,7 +235,7 @@ public: // other modification members
     template<typename... Args>
     reference emplace_back(Args&&... args) {
         if (end_ != end_cap()) {
-            unsafe_insert(end_, std::forward<Args>(args)...);
+            fast_push_back(std::forward<Args>(args)...);
         } else {
             split_buffer<value_type, allocator_type&> buff(size(), expand(size() + 1), alloc());
             buff.emplace_back(std::forward<Args>(args)...);
@@ -258,8 +258,8 @@ public: // other modification members
         auto n = std::distance(first, last);
         auto idx = cpos - begin();
         auto pos = begin_ + idx;
-        if (size() + n > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(static_cast<size_type>(idx), expand(size() + n), alloc());
+        if (end_cap() < n + end_) {
+            split_buffer<value_type, allocator_type&> buff(idx, expand(size() + n), alloc());
             buff.construct_at_end(first, last);
             swap_out_buffer(buff, pos);
         } else {
@@ -269,7 +269,7 @@ public: // other modification members
                 uninit_copy(alloc(), m, last, end_);
                 last = m;
             }
-            right_shift(pos, n);
+            end_ = right_shift(pos, n);
             std::copy(first, last, pos);
         }
         return begin_ + idx;
@@ -278,7 +278,7 @@ public: // other modification members
     iterator insert(const_iterator cpos, size_type n, const value_type& value) {
         auto idx = cpos - begin();
         auto pos = begin_ + idx;
-        if (size() + n > capacity()) {
+        if (end_cap() < end_ + n) {
             split_buffer<value_type, allocator_type&> buff(idx, expand(size() + n), alloc());
             buff.construct_at_end(n, value);
             swap_out_buffer(buff, pos);
@@ -288,7 +288,7 @@ public: // other modification members
                 construct(alloc(), end_, end_ + (n - tail), value);
                 count = tail;
             }
-            right_shift(pos, n);
+            end_ = right_shift(pos, n);
             auto vr = std::pointer_traits<const_pointer>::pointer_to(value);
             if (pos <= vr && vr < end_) {
                 vr += n;
@@ -308,7 +308,7 @@ public: // other modification members
         auto idx = cpos - begin();
         auto old_size = size();
         for (; first != last && end_ != end_cap(); ++first) {
-            unsafe_insert(end_, *first);
+            fast_push_back(*first);
         }
         split_buffer<value_type, allocator_type&> buff(alloc());
         if (first != last) {
@@ -329,11 +329,11 @@ public: // other modification members
             buff.emplace_back(std::forward<Args>(args)...);
             swap_out_buffer(buff, pos);
         } else if (pos != end_) {
-            right_shift(pos, 1);
-            allocator_traits::destroy(alloc(), pos);
+            end_ = right_shift(pos, 1);
+            allocator_traits::destroy(alloc(), pos); // \todo
             allocator_traits::construct(alloc(), pos, std::forward<Args>(args)...);
         } else {
-            unsafe_insert(end_, std::forward<Args>(args)...);
+            fast_push_back(std::forward<Args>(args)...);
         }
 
         return begin() + idx;
@@ -351,12 +351,12 @@ public: // other modification members
         return begin() + n;
     }
 
-    iterator erase(const_iterator first, const_iterator last) {
-        auto f = first - begin();
-        auto l = last - begin();
-        std::move(begin_ + l, end_, begin_ + f);
-        end_ = destroy(alloc(), begin_ + size() - (l - f), end_);
-        return begin() + f;
+    iterator erase(const_iterator cfirst, const_iterator clast) {
+        auto first = begin_ + (cfirst - begin());
+        auto last = begin_ + (clast - begin());
+        std::move(last, end(), first);
+        end_ = destroy(alloc(), end_ - (last - first), end_);
+        return first;
     }
 
     void swap(vector& other) noexcept {
@@ -373,7 +373,8 @@ public: // other modification members
     }
 
     ~vector() {
-        clear_and_free();
+        clear();
+        allocator_traits::deallocate(alloc(), begin_, capacity());
     }
 
 private:
@@ -404,16 +405,9 @@ private:
         std::swap(end_cap(), buff.end_cap());
     }
 
-    void reserve_if_full() {
-        if (end_ == end_cap()) {
-            reserve(expand(size() + 1));
-        }
-    }
-
     template<typename... Args>
-    void unsafe_insert(pointer p, Args&&... elem) {
-        allocator_traits::construct(alloc(), p, std::forward<Args>(elem)...);
-        ++end_;
+    void fast_push_back(Args&&... elem) {
+        allocator_traits::construct(alloc(), end_++, std::forward<Args>(elem)...);
     }
 
     template<typename Constructor>
@@ -438,14 +432,14 @@ private:
             buff.emplace_back(std::forward<U>(value));
             swap_out_buffer(buff, pos);
         } else if (pos != end_) {
-            right_shift(pos, 1);
+            end_ = right_shift(pos, 1);
             auto vr = std::pointer_traits<const_pointer>::pointer_to(value);
             if (pos <= vr && vr < end_) {
                 ++vr;
             }
             *pos = std::forward<U>(*vr);
         } else {
-            unsafe_insert(end_, std::forward<U>(value));
+            fast_push_back(std::forward<U>(value));
         }
         return begin() + idx;
     }
@@ -455,38 +449,19 @@ private:
         end_cap() = begin_ + n;
     }
 
-    void create(size_t n) {
-        allocate_n(n);
-        while (n-- != 0) {
-            unsafe_insert(end_);
-        }
-    }
-
-    void create(size_t n, const_reference value) {
-        allocate_n(n);
-        while (n-- != 0) {
-            unsafe_insert(end_, value);
-        }
-    }
-
     template<typename I>
-    std::enable_if_t<is_input_iter<I>::value, void>
-    create(I first, I last, std::optional<size_type> n = std::nullopt) {
-        allocate_n(n ? *n : std::distance(first, last));
+    void create(I first, I last) {
+        allocate_n(std::distance(first, last));
         end_ = uninit_copy(alloc(), first, last, end_);
     }
 
-    void clear_and_free() {
-        clear();
-        allocator_traits::deallocate(alloc(), begin_, capacity());
-    }
-
-    void right_shift(pointer pos, difference_type n) {
+    pointer right_shift(pointer pos, difference_type n) {
         auto part = end_ - std::min(n, end_ - pos);
         if (part != end_) {
-            end_ = uninit_move(alloc(), part, end_, part + n);
-            std::move_backward(pos, part, end_ - n);
+            uninit_move(alloc(), part, end_, part + n);
+            std::move_backward(pos, part, end_);
         }
+        return end_ + n;
     }
 
 private:

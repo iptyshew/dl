@@ -43,4 +43,14 @@ I destroy(Allocator& alloc, I begin, I end) {
     return begin;
 }
 
+template<typename I, typename O>
+I input_copy_n(I first, size_t n, O out) {
+    while (n-- != 0) {
+        *out = *first;
+        ++first;
+        ++out;
+    }
+    return first;
+}
+
 } // namespace dl
