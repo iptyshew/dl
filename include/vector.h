@@ -37,7 +37,7 @@ public: // aliases
 public: // constructors
     vector() noexcept = default;
 
-    vector(const allocator_type& alloc) noexcept
+    explicit vector(const allocator_type& alloc) noexcept
         : end_cap_allocator_(nullptr, alloc) {}
 
     explicit vector(size_type count,
@@ -69,7 +69,7 @@ public: // constructors
     }
 
     vector(std::initializer_list<value_type> list, const allocator_type& a = allocator_type())
-        : end_cap_allocator_(nullptr, a) {
+        : vector(a) {
         create(list.begin(), list.end());
     }
 
@@ -160,11 +160,12 @@ public: // assigns
     assign(I first, I last) {
         auto n = static_cast<size_type>(std::distance(first, last));
         if (n > capacity()) {
-            clear_and_free();
-            create(first, last, n);
+            split_buffer<value_type, allocator_type&> buff(0, n, alloc());
+            buff.construct_at_end(first, last);
+            swap(buff);
         } else if (n < size()) {
             end_ = destroy(alloc(), std::copy(first, last, begin_), end_);
-        } else if (n > size()) {
+        } else if (n >= size()) {
             for (auto it = begin_; it != end_; ++it, ++first) {
                 *it = *first;
             }
@@ -187,12 +188,13 @@ public: // assigns
 
     void assign(size_type n, const value_type& value) {
         if (n > capacity()) {
-            clear_and_free();
-            create(n, value);
+            split_buffer<value_type, allocator_type&> buff(0, n, alloc());
+            buff.construct_at_end(n, value);
+            swap(buff);
         } else if (n < size()) {
             std::fill(begin_, begin_ + n, value);
             end_ = destroy(alloc(), begin_ + n, end_);
-        } else if (n > size()) {
+        } else if (n >= size()) {
             std::fill(begin_, end_, value);
             end_ = construct(alloc(), end_, begin_ + n, value);
         }
@@ -223,19 +225,22 @@ public: // other modification members
     }
 
     void push_back(const_reference elem) {
-        reserve_if_full();
-        unsafe_insert(end_, elem);
+        emplace_back(elem);
     }
 
     void push_back(value_type&& elem) {
-        reserve_if_full();
-        unsafe_insert(end_, std::move(elem));
+        emplace_back(std::move(elem));
     }
 
     template<typename... Args>
     reference emplace_back(Args&&... args) {
-        reserve_if_full();
-        unsafe_insert(end_, std::forward<Args>(args)...);
+        if (end_ != end_cap()) {
+            unsafe_insert(end_, std::forward<Args>(args)...);
+        } else {
+            split_buffer<value_type, allocator_type&> buff(size(), expand(size() + 1), alloc());
+            buff.emplace_back(std::forward<Args>(args)...);
+            swap_out_buffer(buff);
+        }
         return back();
     }
 
@@ -274,7 +279,7 @@ public: // other modification members
         auto idx = cpos - begin();
         auto pos = begin_ + idx;
         if (size() + n > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(static_cast<size_type>(idx), expand(size() + n), alloc());
+            split_buffer<value_type, allocator_type&> buff(idx, expand(size() + n), alloc());
             buff.construct_at_end(n, value);
             swap_out_buffer(buff, pos);
         } else {
@@ -284,7 +289,11 @@ public: // other modification members
                 count = tail;
             }
             right_shift(pos, n);
-            std::fill(pos, pos + count, value);
+            auto vr = std::pointer_traits<const_pointer>::pointer_to(value);
+            if (pos <= vr && vr < end_) {
+                vr += n;
+            }
+            std::fill(pos, pos + count, *vr);
         }
         return begin_ + idx;
     }
@@ -380,14 +389,16 @@ private:
 
     void swap_out_buffer(split_buffer<value_type, allocator_type&>& buff) {
         uninit_move(buff.alloc(), begin_, end_, buff.begin);
-        std::swap(begin_, buff.begin);
-        std::swap(end_, buff.end);
-        std::swap(end_cap(), buff.end_cap());
+        swap(buff);
     }
 
     void swap_out_buffer(split_buffer<value_type, allocator_type&>& buff, pointer pos) {
         uninit_move(buff.alloc(), begin_, pos, buff.begin);
         buff.end = uninit_move(buff.alloc(), pos, end_, buff.end);
+        swap(buff);
+    }
+
+    void swap(split_buffer<value_type, allocator_type&>& buff) {
         std::swap(begin_, buff.begin);
         std::swap(end_, buff.end);
         std::swap(end_cap(), buff.end_cap());
@@ -428,7 +439,11 @@ private:
             swap_out_buffer(buff, pos);
         } else if (pos != end_) {
             right_shift(pos, 1);
-            *pos = std::forward<U>(value);
+            auto vr = std::pointer_traits<const_pointer>::pointer_to(value);
+            if (pos <= vr && vr < end_) {
+                ++vr;
+            }
+            *pos = std::forward<U>(*vr);
         } else {
             unsafe_insert(end_, std::forward<U>(value));
         }

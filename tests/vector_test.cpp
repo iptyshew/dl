@@ -95,7 +95,7 @@ TEST(VectorTest, Constructors) {
     }
 }
 
-TEST(VectorTest, ChangeLastElement) {
+TEST(VectorTest, BackOperations) {
     auto result = makeVector({1, 2, 3});
     { // rvalue
         auto vec = makeVector();
@@ -116,6 +116,20 @@ TEST(VectorTest, ChangeLastElement) {
         }
         CHECK_TRACE(0, 3, 3, 0, 0, 3);
         CHECK_VECTOR(vec, result, 4);
+    }
+    { // push lvalue reference from this
+        auto vec = makeVector({1, 2});
+        trace_int::init();
+        vec.push_back(vec.back());
+        CHECK_TRACE(0, 1, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2, 2}), 4);
+    }
+    { // push rvalue reference from this
+        auto vec = makeVector({1, 2});
+        trace_int::init();
+        vec.push_back(std::move(vec.back()));
+        CHECK_TRACE(0, 0, 3, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 0, 2}), 4);
     }
     { // emplace_back
         auto vec = makeVector({1, 2});
@@ -216,6 +230,14 @@ TEST(VectorTest, resize) {
         CHECK_TRACE(0, 0, 0, 0, 0, 0);
         CHECK_VECTOR(vec, res, 4);
     }
+    { // val is reference from this
+        auto vec = makeVector({1, 2});
+        vec.reserve(4);
+        trace_int::init();
+        vec.resize(6, vec.back());
+        CHECK_TRACE(0, 4, 2, 0, 0, 2);
+        CHECK_VECTOR(vec, makeVector({1, 2, 2, 2, 2, 2}), 8);
+    }
 }
 
 TEST(VectorTest, compare) {
@@ -237,7 +259,7 @@ TEST(VectorTest, compare) {
 }
 
 TEST(VectorTest, assign) {
-    { // assign: count > size, capacity
+    { // count > size, capacity
         auto vec = makeVector({1, 2});
         auto res = makeVector({10, 20, 30});
         auto old_size = vec.size();
@@ -246,7 +268,7 @@ TEST(VectorTest, assign) {
         CHECK_TRACE(0, res.size(), 0, 0, 0, old_size);
         CHECK_VECTOR(vec, res, vec.size());
     }
-    { // assign: count < size, capacity
+    { // count < size, capacity
         auto vec = makeVector({1, 2, 3});
         vec.reserve(4);
         auto res = makeVector({10, 20});
@@ -255,7 +277,7 @@ TEST(VectorTest, assign) {
         CHECK_TRACE(0, 0, 0, res.size(), 0, 1);
         CHECK_VECTOR(vec, res, 4);
     }
-    { // assign: size < count < capacity
+    { // size < count < capacity
         auto vec = makeVector({1, 2, 3});
         vec.reserve(6);
         auto res = makeVector({10, 20, 30, 40});
@@ -264,6 +286,14 @@ TEST(VectorTest, assign) {
         CHECK_TRACE(0, 1, 0, 3, 0, 0);
         CHECK_VECTOR(vec, res, 6);
     }
+    { // assign range from self
+        auto vec = makeVector({1, 2, 3});
+        trace_int::init();
+        vec.assign(vec.begin() + 1, vec.end());
+        CHECK_TRACE(0, 0, 0, 2, 0, 1);
+        CHECK_VECTOR(vec, makeVector({2, 3}), 3);
+    }
+
     { // initializer list
         auto vec = makeVector();
         auto list = {trace_int(10), trace_int(20), trace_int(30)};
@@ -273,7 +303,7 @@ TEST(VectorTest, assign) {
     }
 
     trace_int val(10);
-    { // assign: count > size, capacity
+    { // count > size, capacity
         auto vec = makeVector({1, 2});
         auto res = makeVector({10, 10, 10});
         auto old_size = vec.size();
@@ -282,7 +312,7 @@ TEST(VectorTest, assign) {
         CHECK_TRACE(0, res.size(), 0, 0, 0, old_size);
         CHECK_VECTOR(vec, res, vec.capacity());
     }
-    { // assign: count < size, capacity
+    { // count < size, capacity
         auto vec = makeVector({1, 2, 3});
         vec.reserve(4);
         auto res = makeVector({10, 10});
@@ -291,7 +321,7 @@ TEST(VectorTest, assign) {
         CHECK_TRACE(0, 0, 0, res.size(), 0, 1);
         CHECK_VECTOR(vec, res, 4);
     }
-    { // assign: size < count < capacity
+    { // size < count < capacity
         auto vec = makeVector({1, 2, 3});
         vec.reserve(6);
         auto res = makeVector({10, 10, 10, 10});
@@ -299,6 +329,13 @@ TEST(VectorTest, assign) {
         vec.assign(res.size(), val);
         CHECK_TRACE(0, 1, 0, 3, 0, 0);
         CHECK_VECTOR(vec, res, 6);
+    }
+    { // assign val from self
+        auto vec = makeVector({1, 2, 3});
+        trace_int::init();
+        vec.assign(3, vec.front());
+        CHECK_TRACE(0, 0, 0, 3, 0, 0);
+        CHECK_VECTOR(vec, makeVector({1, 1, 1}), 3);
     }
     { // input iterator
         std::stringstream stream;
@@ -371,7 +408,7 @@ TEST(VectorTest, erase) {
 }
 
 TEST(VectorTest, insert) {
-    { // some insert;
+    { // some inserts;
         auto vec = makeVector();
         std::initializer_list<trace_int> list{1, 2, 3, 4};
         trace_int::init();
@@ -381,6 +418,15 @@ TEST(VectorTest, insert) {
         CHECK_TRACE(0, 3, 4, 1, 2, 3);
         auto res = makeVector({4, 3, 2, 1});
         CHECK_VECTOR(vec, res, 4);
+    }
+    { // insert ref from self
+        auto vec = makeVector({1, 2, 3});
+        vec.reserve(5);
+        trace_int::init();
+        vec.insert(vec.begin(), vec.begin()[1]);
+        CHECK_TRACE(0, 0, 1, 1, 2, 0);
+        auto res = makeVector({2, 1, 2, 3});
+        CHECK_VECTOR(vec, res, 5);
     }
     { // push back
         auto vec = makeVector({1, 2});
@@ -459,6 +505,14 @@ TEST(VectorTest, insert_n_val) {
         vec.insert(vec.begin() + 1, 2, val);
         CHECK_TRACE(0, 2, 3, 0, 0, 3);
         CHECK_VECTOR(vec, makeVector({1, 6, 6, 4, 5}), 6);
+    }
+    { // insert ref from self
+        auto vec = makeVector({1, 4, 5});
+        vec.reserve(5);
+        trace_int::init();
+        vec.insert(vec.begin(), 2, vec.begin()[1]);
+        CHECK_TRACE(0, 0, 2, 2, 1, 0);
+        CHECK_VECTOR(vec, makeVector({4, 4, 1, 4, 5}), 5);
     }
 }
 

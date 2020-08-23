@@ -22,6 +22,7 @@ public:
     trace_type(trace_type&& o) noexcept
         : value(std::move(o.value)) {
         ++move_rval_construct;
+        o.value = T();
     }
 
     trace_type& operator=(const trace_type& o) {
@@ -38,6 +39,7 @@ public:
 
     ~trace_type() {
         ++destruct;
+        value = T();
     }
 
     static void init() {
@@ -48,7 +50,7 @@ public:
         operator_rval_construct = 0;
         destruct = 0;
     }
-    int value;
+    T value;
 
     static size_t basic_construct;
     static size_t copy_lval_construct;
