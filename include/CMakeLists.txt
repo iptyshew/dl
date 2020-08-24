@@ -4,6 +4,7 @@ target_sources(${LIB_NAME} INTERFACE
   vector.h
   compressed_pair.h
   split_buffer.h
-  type_utils.h)
+  type_utils.h
+  algorithm.h)
 
 target_include_directories(${LIB_NAME} INTERFACE .)

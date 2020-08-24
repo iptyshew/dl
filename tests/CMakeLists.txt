@@ -2,6 +2,7 @@ project(test_dl)
 
 set(${PROJECT_NAME}_SRC
   vector_test.cpp
+  memory_test.cpp
 )
 
 add_executable(${PROJECT_NAME} ${${PROJECT_NAME}_SRC})
