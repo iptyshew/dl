@@ -237,7 +237,7 @@ public: // other modification members
         if (end_ != end_cap()) {
             fast_push_back(std::forward<Args>(args)...);
         } else {
-            split_buffer<value_type, allocator_type&> buff(size(), expand(size() + 1), alloc());
+            split_buffer<value_type, allocator_type &> buff(size(), calc_size(size() + 1), alloc());
             buff.emplace_back(std::forward<Args>(args)...);
             swap_out_buffer(buff);
         }
@@ -259,7 +259,7 @@ public: // other modification members
         auto idx = cpos - begin();
         auto pos = begin_ + idx;
         if (end_cap() < n + end_) {
-            split_buffer<value_type, allocator_type&> buff(idx, expand(size() + n), alloc());
+            split_buffer<value_type, allocator_type &> buff(idx, calc_size(size() + n), alloc());
             buff.construct_at_end(first, last);
             swap_out_buffer(buff, pos);
         } else {
@@ -272,14 +272,14 @@ public: // other modification members
             end_ = right_shift(pos, n);
             std::copy(first, last, pos);
         }
-        return begin_ + idx;
+        return begin() + idx;
     }
 
     iterator insert(const_iterator cpos, size_type n, const value_type& value) {
         auto idx = cpos - begin();
         auto pos = begin_ + idx;
         if (end_cap() < end_ + n) {
-            split_buffer<value_type, allocator_type&> buff(idx, expand(size() + n), alloc());
+            split_buffer<value_type, allocator_type &> buff(idx, calc_size(size() + n), alloc());
             buff.construct_at_end(n, value);
             swap_out_buffer(buff, pos);
         } else {
@@ -295,7 +295,7 @@ public: // other modification members
             }
             std::fill(pos, pos + count, *vr);
         }
-        return begin_ + idx;
+        return begin() + idx;
     }
 
     iterator insert(const_iterator pos, std::initializer_list<value_type> list) {
@@ -313,7 +313,7 @@ public: // other modification members
         split_buffer<value_type, allocator_type&> buff(alloc());
         if (first != last) {
             buff.construct_at_end(first, last);
-            reserve(expand(size() + buff.size()));
+            reserve(calc_size(size() + buff.size()));
         }
         insert(std::rotate(begin_ + idx, begin_ + old_size, end_),
                std::make_move_iterator(buff.begin), std::make_move_iterator(buff.end));
@@ -325,7 +325,7 @@ public: // other modification members
         auto idx = cpos - begin();
         auto pos = begin_ + idx;
         if (end_ == end_cap()) {
-            split_buffer<value_type, allocator_type&> buff(idx, expand(size() + 1), alloc());
+            split_buffer<value_type, allocator_type &> buff(idx, calc_size(size() + 1), alloc());
             buff.emplace_back(std::forward<Args>(args)...);
             swap_out_buffer(buff, pos);
         } else if (pos != end_) {
@@ -378,7 +378,7 @@ public: // other modification members
     }
 
 private:
-    size_t expand(size_t new_size) const noexcept {
+    size_t calc_size(size_t new_size) const noexcept {
         return std::max(new_size, capacity() * 2);
     }
 
@@ -414,13 +414,13 @@ private:
     void resize_impl(size_type n, const Constructor& constructor) {
         auto sz = size();
         if (n > capacity()) {
-            split_buffer<value_type, allocator_type&> buff(n, expand(n), alloc());
+            split_buffer<value_type, allocator_type &> buff(n, calc_size(n), alloc());
             constructor(buff.begin + sz, buff.end);
             swap_out_buffer(buff);
-        } else if (n < sz) {
-            end_ = destroy(alloc(), begin_ + n, end_);
-        } else if (n > sz) {
-            end_ = constructor(begin_ + sz, begin_ + n);
+        } else {
+            end_ = (n < sz)
+                ? destroy(alloc(), begin_ + n, end_)
+                : constructor(end_, begin_ + n);
         }
     }
 
@@ -428,7 +428,7 @@ private:
     iterator insert_impl(difference_type idx, U&& value) {
         auto pos = begin_ + idx;
         if (end_ == end_cap()) {
-            split_buffer<value_type, allocator_type&> buff(idx, expand(size() + 1), alloc());
+            split_buffer<value_type, allocator_type &> buff(idx, calc_size(size() + 1), alloc());
             buff.emplace_back(std::forward<U>(value));
             swap_out_buffer(buff, pos);
         } else if (pos != end_) {
