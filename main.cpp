@@ -10,7 +10,7 @@
 #include "tests/test_type.h"
 #include "include/memory.h"
 
+
 int main() {
-    dl::unique_ptr<int> a;
-    std::cout << *a;
+    return 0;
 }
